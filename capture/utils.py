@@ -14,8 +14,9 @@ def throttle(delay):
             nonlocal LAST_ACTION
             t = time.time()
             if t - LAST_ACTION >= delay:
-                func(*args, **kwargs)
+                ret = func(*args, **kwargs)
                 LAST_ACTION = t
+                return ret
 
         return rets
 
