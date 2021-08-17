@@ -1,4 +1,6 @@
+import json
 import time
+from contextlib import suppress
 
 import cv2
 import easyocr
@@ -7,8 +9,11 @@ import numpy as np
 import pyautogui
 from IPython import get_ipython
 
+from fan_tools.python import py_rel_path
+
 from capture import ipy  # autoreload self
 from capture import utils
+from capture.utils import throttle
 
 
 i = get_ipython()
@@ -18,12 +23,38 @@ i.magic('%autoreload 2')
 
 sct = mss.mss()
 LIFE_POS = False
-POSITION = [0, 0, 300, 50]
+POS_FILE = py_rel_path('../.old_pos')
+DEFAULT_POS = [0, 0, 300, 50]
+POSITION = None
+
 CHECK_MON = sct.monitors[0]
 STEP = 20
 reader = easyocr.Reader(['en'], gpu=True)
 IMG = None
 DATA = 'default'
+
+
+def get_pos():
+    global POSITION
+
+    if POS_FILE.exists():
+        with suppress(Exception):
+            POSITION = json.loads(POS_FILE.read_text())
+            print(f'READ: {POSITION=}')
+            if not POSITION:
+                set_pos(POSITION)
+    if not POSITION:
+        set_pos(DEFAULT_POS)
+    print(f'{POSITION=}')
+
+
+def set_pos(new_pos):
+    global POSITION
+    POSITION = new_pos
+    POS_FILE.write_text(json.dumps(new_pos))
+
+
+get_pos()
 
 
 def ik(key, char):
@@ -88,22 +119,57 @@ def run_detect():
             # x1 = coord[]
 
 
-LAST_TAP = time.time()
-TAP_DELAY = 0.8
+@throttle(3.0)
+def convocation():
+    pyautogui.hotkey('w')  # convoc
 
 
-def life_tap():
-    global LAST_TAP
-    t = time.time()
-    if t - LAST_TAP > TAP_DELAY:
-        pyautogui.hotkey('g')  # life
-        pyautogui.hotkey('w')  # convoc
-        pyautogui.hotkey('r')  #
-        LAST_TAP = t
+@throttle(4.0)
+def reaper():
+    pyautogui.hotkey('r')  # reaper
+
+
+@throttle(0.6)
+def instant_life_tap():
+    pyautogui.hotkey('g')  # life
+    convocation()
+    reaper()
+
+
+@throttle(7.0)
+def long_life_tap():
+    pyautogui.hotkey('a')  # life long
+    convocation()
+    reaper()
+
+
+def life_processing(img):
+    if not LIFE_POS:
+        cv2.putText(img, f'D: {DATA}', (5, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 255), 2)
+    else:
+        life = get_life(img)
+
+        if life:
+            perc = life[0] / life[1]
+            if not life[0]:
+                data = 'DEAD'
+            elif perc < 0.4:
+                instant_life_tap()
+                data = f'TAP: {str(life[0])}'
+            elif perc < 0.7:
+                long_life_tap()
+                data = f'LTAP: {perc=}'
+            else:
+                data = f'NP: {str(life[0])}'
+            cv2.putText(img, data, (5, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 255), 2)
 
 
 def capture_loop():
-    global POSITION, LIFE_POS
+    if not POSITION:
+        get_pos()
+
+    global LIFE_POS
+
     try:
         while True:
             pos = tuple(POSITION)
@@ -111,21 +177,7 @@ def capture_loop():
             s = sct.grab(pos)
             img = np.array(s)
             img2 = img.copy()
-            if not LIFE_POS:
-                cv2.putText(
-                    img, f'D: {DATA}', (5, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 255), 2
-                )
-            if LIFE_POS:
-                life = get_life(img)
-                if life:
-                    if not life[0]:
-                        data = 'DEAD'
-                    elif life[0] / life[1] < 0.4:
-                        life_tap()
-                        data = f'TAP: {str(life[0])}'
-                    else:
-                        data = f'NP: {str(life[0])}'
-                    cv2.putText(img, data, (5, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 255), 2)
+            life_processing(img)
             cv2.imshow('example', img)
 
             k = cv2.waitKey(50) & 0xFF
@@ -148,11 +200,13 @@ def capture_loop():
                 run_ocr(img2)
             elif ik(k, 'd'):
                 run_detect()
+            elif ik(k, 'a'):
+                LIFE_POS = True
 
             if delta:
                 LIFE_POS = False
                 new_pos = list(map(sum, zip(POSITION, delta)))
                 if bound_ok(new_pos):
-                    POSITION = new_pos
+                    set_pos(new_pos)
     finally:
         cv2.destroyAllWindows()
