@@ -1,5 +1,4 @@
 import json
-import time
 from abc import ABC, abstractmethod
 from contextlib import suppress
 from functools import lru_cache
@@ -8,14 +7,12 @@ import cv2
 import easyocr
 import mss
 import numpy as np
-import pyautogui
 from IPython import get_ipython
 
 from fan_tools.python import py_rel_path
 
 from capture import ipy  # autoreload self
-from capture import utils
-from capture.utils import throttle
+from capture.utils import ctx, throttle
 
 
 i = get_ipython()
@@ -80,7 +77,7 @@ def bound_ok(rect):
     return True
 
 
-#@lru_cache(3)
+# @lru_cache(3)
 def run_ocr(img: np.ndarray):
     global IMG, DATA
     IMG = img
@@ -95,26 +92,26 @@ def run_ocr(img: np.ndarray):
 
 @throttle(3.0)
 def convocation():
-    pyautogui.hotkey('w')  # convoc
+    ctx.gui.hotkey('w')  # convoc
     return 11
 
 
 @throttle(4.0)
 def reaper():
-    pyautogui.hotkey('r')  # reaper
+    ctx.gui.hotkey('r')  # reaper
     return 58
 
 
 @throttle(0.6)
 def instant_life_tap():
-    pyautogui.hotkey('g')  # life
+    ctx.gui.hotkey('g')  # life
     convocation()
     reaper()
 
 
 @throttle(7.0)
 def long_life_tap():
-    pyautogui.hotkey('a')  # life long
+    ctx.gui.hotkey('a')  # life long
     convocation()
     reaper()
 
@@ -124,8 +121,8 @@ def summon():
     pass
 
 
-def put_text(img, txt):
-    cv2.putText(img, txt, (5, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 255), 2)
+def put_text(img, txt, pos=(5, 20)):
+    cv2.putText(img, txt, pos, cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 255), 2)
 
 
 def life_processing(img):
@@ -182,6 +179,10 @@ class OCRArea(ABC):
         str = data[0][1]
         return str
 
+    @property
+    def rect(self):
+        return (self.pos[0], self.pos[1]), (self.pos[2], self.pos[3])
+
 
 def detect_next(img, txt):
     texts = run_ocr(img)
@@ -200,7 +201,7 @@ def detect_next(img, txt):
 class LifeFragment(OCRArea):
     def __init__(self):
         super().__init__('life')
-        self.prev = 0
+        self.prev = None
         self.ls = None
 
     def detect(self, img):
@@ -210,6 +211,8 @@ class LifeFragment(OCRArea):
             self.set_pos(new_pos)
 
     def frame(self, full):
+        self.prev = None
+
         img = crop(full, self.pos or [0, 0, 150, 150])
         self.last_img = img
         if not self.pos:
@@ -219,6 +222,7 @@ class LifeFragment(OCRArea):
         try:
             curr, total = self.get_life(img)
             perc = curr / total
+            self.prev = (curr, total)
             if not curr:
                 data = 'DEAD'
             elif perc < 0.4:
@@ -271,7 +275,7 @@ class ManaFragment(OCRArea):
 
     def calc_threshold(self):
         threshold = self.threshold
-        t = time.time()
+        t = ctx.time()
         print(f'{self.to_regen=}')
         if self.to_regen:
             d = t - self.to_regen_t
@@ -300,7 +304,7 @@ class ManaFragment(OCRArea):
         curr, total = mana_str.split('/')
         curr = int(curr.replace(',', ''))
         total = int(total.replace(',', ''))
-        t = time.time()
+        t = ctx.time()
         # print(f'MANA: {curr=} {self.prev=} / {self.last_change=}')
 
         # if curr != self.prev:
@@ -317,6 +321,42 @@ class ManaFragment(OCRArea):
     def on_change(self):
         self.add_regen(convocation())
         self.add_regen(reaper())
+
+
+def video_frames(cap):
+    positioned = False
+    life = LifeFragment()
+    while cap.isOpened():
+        ok, frame = cap.read()
+        if not ok:
+            break
+        if cv2.waitKey(10) & 0xFF == ord('q'):
+            break
+        elif cv2.waitKey(10) & 0xFF == ord('d'):
+            life.detect(frame)
+
+        life.frame(frame)
+        cv2.rectangle(frame, *life.rect, (255, 0, 255), 1)
+        put_text(frame, str(life.prev), life.rect[1])
+
+        cv2.imshow('video', frame)
+        if not positioned:
+            positioned = True
+            m2 = sct.monitors[2]
+            cv2.moveWindow('video', m2['left'], m2['top'])
+    print(f'Finished: {cap=}')
+
+
+def play_video(video=py_rel_path('../20210818_13-14-52.mp4').resolve().as_uri()):
+    with ctx.mock_gui():
+        try:
+            cap = cv2.VideoCapture(video)
+            video_frames(cap)
+        except Exception as e:
+            print(f'Exc: {e}')
+            raise
+        finally:
+            cv2.destroyAllWindows()
 
 
 def capture_loop():
