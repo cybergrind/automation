@@ -33,6 +33,7 @@ DEFAULT_POS = [0, 0, 300, 50]
 POSITION = None
 
 CHECK_MON = sct.monitors[0]
+F_MON = sct.monitors[1]
 STEP = 20
 reader = easyocr.Reader(['en'], gpu=True)
 IMG = None
@@ -330,7 +331,7 @@ def capture_loop():
     try:
         while True:
             pos = tuple(POSITION)
-            s = sct.grab(CHECK_MON)
+            s = sct.grab(F_MON)
             full = np.array(s)
             img = crop(full, pos)
 
