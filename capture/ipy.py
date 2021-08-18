@@ -25,6 +25,7 @@ LIFE_POS = False
 POS_FILE = py_rel_path('../.old_pos')
 FILE_BASE = py_rel_path('../.data')
 FILE_BASE.mkdir(exist_ok=True)
+CONF_TRESHOLD = 0.7
 
 DEFAULT_POS = [0, 0, 300, 50]
 POSITION = None
@@ -35,6 +36,17 @@ STEP = 20
 reader = easyocr.Reader(['en'], gpu=True)
 IMG = None
 DATA = 'default'
+
+
+def s(img):
+    """debug show"""
+    cv2.imshow('debug', img)
+    cv2.waitKey(60)
+
+
+def dd():
+    """destroy debug"""
+    cv2.destroyWindow('debug')
 
 
 def get_pos():
@@ -116,41 +128,20 @@ def long_life_tap():
     reaper()
 
 
-@throttle(8.0)
+@throttle(0.5)
 def summon():
-    pass
+    ctx.gui.click(button='right')
 
 
 def put_text(img, txt, pos=(5, 20)):
     cv2.putText(img, txt, pos, cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 255), 2)
 
 
-def life_processing(img):
-    if not LIFE_POS:
-        cv2.putText(img, f'D: {DATA}', (5, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 255), 2)
-    else:
-        life = get_life(img)
-
-        if life:
-            perc = life[0] / life[1]
-            if not life[0]:
-                data = 'DEAD'
-            elif perc < 0.4:
-                instant_life_tap()
-                data = f'TAP: {str(life[0])}'
-            elif perc < 0.7:
-                long_life_tap()
-                data = f'LTAP: {perc=}'
-            else:
-                data = f'NP: {str(life[0])}'
-            cv2.putText(img, data, (5, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 255), 2)
-
-
 def crop(full, pos):
     x0, x1 = pos[0], pos[2]
     y0, y1 = pos[1], pos[3]
     img = full[y0:y1, x0:x1, :]
-    return img
+    return img.copy()
 
 
 class OCRArea(ABC):
@@ -176,8 +167,8 @@ class OCRArea(ABC):
 
     def ocr_one(self, img):
         data = reader.readtext(img)
-        str = data[0][1]
-        return str
+        s, confidence = data[0][1], data[0][2]
+        return s, confidence
 
     @property
     def rect(self):
@@ -199,10 +190,17 @@ def detect_next(img, txt):
 
 
 class LifeFragment(OCRArea):
+    """
+    pos: [130, 1083, 264, 1119]
+    """
+
     def __init__(self):
         super().__init__('life')
         self.prev = None
         self.ls = None
+        self.prev_err = None
+        self.frames = 0
+        self.conf = 1.0
 
     def detect(self, img):
         new_pos = detect_next(img, 'life')
@@ -210,11 +208,34 @@ class LifeFragment(OCRArea):
             print(f'POS: {new_pos}')
             self.set_pos(new_pos)
 
+    def keep_bw(self, img):
+        # return img # 0.891
+        hl, hh = 175, 255  # hl 180=.910, 175=.915, 165
+        lh = 70  # 70=.896 80=.896
+        if img.shape[2] == 3:
+            self.mask1 = cv2.inRange(img, (hl, hl, hl), (hh, hh, hh))
+            self.mask2 = cv2.inRange(img, (0, 0, 0), (lh, lh, lh))
+        else:
+            self.mask1 = cv2.inRange(img, (hl, hl, hl, 0), (hh, hh, hh, 255))
+            self.mask2 = cv2.inRange(img, (0, 0, 0, 0), (lh, lh, lh, 255))
+        self.mask = self.mask1.copy()
+        self.mask[self.mask2 > 1] = 255
+        out = cv2.GaussianBlur(
+            img, (3, 3), cv2.BORDER_DEFAULT
+        )  # 1x=.890 3x=0899 5x.883 7x=.90 9x.85
+        out[self.mask > 1] = img[self.mask > 1]  # 0.899
+        # out = cv2.bitwise_and(img, img, mask=self.mask)  # 0.899
+        # out = cv2.GaussianBlur(out, (3, 3), cv2.BORDER_DEFAULT)
+        return out
+
     def frame(self, full):
         self.prev = None
 
         img = crop(full, self.pos or [0, 0, 150, 150])
-        self.last_img = img
+        img = self.keep_bw(img)
+
+        self.last_img = img.copy()
+
         if not self.pos:
             put_text(img, 'wait init')
             return
@@ -234,24 +255,32 @@ class LifeFragment(OCRArea):
                 data = f'LTAP: {perc}'
             elif perc < 0.99:
                 convocation()
+                summon()
                 data = f'NP: {curr}/ {perc}'
             else:
                 data = f'NP: {curr}'
         except Exception as e:
-            print(f'{e=}', flush=True)
-            print(f'{e=} {self.ls=}', flush=True)
-            pass
+            err = f'{e=} {self.ls=}'
+            if err != self.prev_err:
+                print(err, flush=True)
+                self.prev_err = err
         put_text(img, data)
+        return img
 
     def get_life(self, img: np.ndarray):
-        life_string = self.ocr_one(img).replace(',', '').replace('.', '')
+        life_string, conf = self.ocr_one(img)
+        self.conf = (self.conf * self.frames + conf) / (self.frames + 1)
+        # print(f'{self.conf=} {self.frames=} {conf=}')
+        self.frames += 1
+        if conf < CONF_TRESHOLD:
+            print(f'{life_string=} => {conf=}')
+            return
+        life_string = life_string.replace(',', '').replace('.', '')
+
         self.ls = life_string
-        if '/' in life_string:
-            curr, total = life_string.split('/')
-        else:
-            curr, total = life_string[:-5], life_string[-4:]
-            if len(curr) > 4:
-                curr = curr[:4]
+        if '/' not in life_string:
+            return
+        curr, total = life_string.split('/')
 
         curr = int(curr)
         total = int(total)
@@ -300,7 +329,9 @@ class ManaFragment(OCRArea):
             self.process_mana(crop(full, self.pos))
 
     def process_mana(self, img):
-        mana_str = self.ocr_one(img)
+        mana_str, conf = self.ocr_one(img)
+        if conf < CONF_TRESHOLD:
+            return
         curr, total = mana_str.split('/')
         curr = int(curr.replace(',', ''))
         total = int(total.replace(',', ''))
@@ -326,8 +357,14 @@ class ManaFragment(OCRArea):
 def video_frames(cap):
     positioned = False
     life = LifeFragment()
+    c = 0
     while cap.isOpened():
+        c += 1
         ok, frame = cap.read()
+        if c < 30:
+            continue
+
+        orig = frame.copy()
         if not ok:
             break
         if cv2.waitKey(10) & 0xFF == ord('q'):
@@ -338,6 +375,12 @@ def video_frames(cap):
         life.frame(frame)
         cv2.rectangle(frame, *life.rect, (255, 0, 255), 1)
         put_text(frame, str(life.prev), life.rect[1])
+
+        print(f'L: {life.prev} / {life.frames} / {life.conf}', flush=True)
+
+        if life.prev and (life.prev[1] != 4246):
+            cv2.imwrite('bad.png', orig)
+            cv2.waitKey(10000)
 
         cv2.imshow('video', frame)
         if not positioned:
@@ -356,7 +399,7 @@ def play_video(video=py_rel_path('../20210818_13-14-52.mp4').resolve().as_uri())
             print(f'Exc: {e}')
             raise
         finally:
-            cv2.destroyAllWindows()
+            cv2.destroyWindow('video')
 
 
 def capture_loop():
@@ -377,11 +420,11 @@ def capture_loop():
 
             img2 = img.copy()
 
-            life.frame(full)
+            last = life.frame(full)
             # mana.frame(full)
 
-            if life.last_img is not None:
-                cv2.imshow('LIFE', life.last_img)
+            if last is not None:
+                cv2.imshow('LIFE', last)
 
             k = cv2.waitKey(30) & 0xFF
 
