@@ -26,6 +26,10 @@ POS_FILE = py_rel_path('../.old_pos')
 FILE_BASE = py_rel_path('../.data')
 FILE_BASE.mkdir(exist_ok=True)
 CONF_TRESHOLD = 0.7
+BUFF_NUMS = {}
+
+for i in range(2, 21):
+    BUFF_NUMS[i] = cv2.imread(f'buffs/{i}.png')
 
 DEFAULT_POS = [0, 0, 300, 50]
 POSITION = None
@@ -137,11 +141,62 @@ def put_text(img, txt, pos=(5, 20)):
     cv2.putText(img, txt, pos, cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 255), 2)
 
 
-def crop(full, pos):
+def crop(full, pos, copy=True):
     x0, x1 = pos[0], pos[2]
     y0, y1 = pos[1], pos[3]
     img = full[y0:y1, x0:x1, :]
-    return img.copy()
+    if copy:
+        return img.copy()
+    return img
+
+
+PHANT = cv2.imread('phant.png')
+
+
+def get_phantasms(f):
+    cropped = crop(f, (0, 0, 700, 125), copy=False)
+    # can be: np.where(cv2.matchTemplate(cropped, PHANT, cv2.TM_CCOEFF_NORMED) > 0.77)
+    _, conf, _, coord = cv2.minMaxLoc(cv2.matchTemplate(cropped, PHANT, cv2.TM_CCOEFF_NORMED))
+
+    if conf > 0.7:
+        x0, y0 = coord
+        dy, dx = PHANT.shape[:2]
+        return crop(cropped, (x0, y0, x0 + dx, y0 + dy), copy=False)
+
+
+def phantasms_count(f):
+    return find_num((get_phantasms(f)))
+
+
+SKELS = cv2.imread('skels.png')
+
+
+def get_skels(f):
+    cropped = crop(f, (0, 0, 700, 125), copy=False)
+    _, conf, _, coord = cv2.minMaxLoc(cv2.matchTemplate(cropped, SKELS, cv2.TM_CCOEFF_NORMED))
+
+    if conf > 0.7:
+        x0, y0 = coord
+        dy, dx = SKELS.shape[:2]
+        return crop(cropped, (x0, y0, x0 + dx + 19, y0 + dy + 21), copy=False)
+
+
+def skels_count(f):
+    return find_num((get_skels(f)))
+
+
+def find_num(img):
+    candidate = 0
+    max_conf = 0
+    if img is None:
+        return 0
+    for i, mask in BUFF_NUMS.items():
+        _, conf, _, coord = cv2.minMaxLoc(cv2.matchTemplate(img, mask, cv2.TM_CCOEFF_NORMED))
+        if conf > max_conf:
+            candidate = i
+            max_conf = conf
+    if max_conf > 0.7:
+        return candidate
 
 
 class OCRArea(ABC):
