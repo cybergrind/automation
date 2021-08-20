@@ -21,18 +21,15 @@ iem.load_extension('autoreload')
 i.magic('%autoreload 2')
 
 sct = mss.mss()
-LIFE_POS = False
-POS_FILE = py_rel_path('../.old_pos')
 FILE_BASE = py_rel_path('../.data')
 FILE_BASE.mkdir(exist_ok=True)
-CONF_TRESHOLD = 0.7
+
+CONF_THRESHOLD = 0.67  # OCR
+CONF_THRESHOLD_TM = 0.7  # cv2 template matching
 BUFF_NUMS = {}
 
 for i in range(2, 21):
     BUFF_NUMS[i] = cv2.imread(f'buffs/{i}.png')
-
-DEFAULT_POS = [0, 0, 300, 50]
-POSITION = None
 
 CHECK_MON = sct.monitors[0]
 F_MON = sct.monitors[1]
@@ -42,38 +39,27 @@ IMG = None
 DATA = 'default'
 
 
+_SHOW = None  # Debug Image
+
+
 def s(img):
     """debug show"""
+    global _SHOW
     cv2.imshow('debug', img)
     cv2.waitKey(60)
+    _SHOW = img
+
+
+def save(name):
+    """save debug image"""
+    if _SHOW is None:
+        return
+    return cv2.imwrite(name, _SHOW)
 
 
 def dd():
     """destroy debug"""
     cv2.destroyWindow('debug')
-
-
-def get_pos():
-    global POSITION
-
-    if POS_FILE.exists():
-        with suppress(Exception):
-            POSITION = json.loads(POS_FILE.read_text())
-            print(f'READ: {POSITION=}')
-            if not POSITION:
-                set_pos(POSITION)
-    if not POSITION:
-        set_pos(DEFAULT_POS)
-    print(f'{POSITION=}')
-
-
-def set_pos(new_pos):
-    global POSITION
-    POSITION = new_pos
-    POS_FILE.write_text(json.dumps(new_pos))
-
-
-get_pos()
 
 
 def ik(key, char):
@@ -138,7 +124,13 @@ def summon():
 
 
 def put_text(img, txt, pos=(5, 20)):
-    cv2.putText(img, txt, pos, cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 255), 2)
+    if isinstance(txt, str):
+        cv2.putText(img, txt, pos, cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 255), 2)
+    elif isinstance(txt, list):
+        x, y = pos
+        for idx, s in enumerate(txt):
+            text_pos = (x, y + idx * 17)
+            cv2.putText(img, s, text_pos, cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 255), 2)
 
 
 def crop(full, pos, copy=True):
@@ -146,8 +138,8 @@ def crop(full, pos, copy=True):
     y0, y1 = pos[1], pos[3]
     img = full[y0:y1, x0:x1, :]
     if copy:
-        return img.copy()
-    return img
+        return img.copy()[:, :, :3]
+    return img[:, :, :3]
 
 
 PHANT = cv2.imread('phant.png')
@@ -158,10 +150,10 @@ def get_phantasms(f):
     # can be: np.where(cv2.matchTemplate(cropped, PHANT, cv2.TM_CCOEFF_NORMED) > 0.77)
     _, conf, _, coord = cv2.minMaxLoc(cv2.matchTemplate(cropped, PHANT, cv2.TM_CCOEFF_NORMED))
 
-    if conf > 0.7:
+    if conf > CONF_THRESHOLD_TM:
         x0, y0 = coord
         dy, dx = PHANT.shape[:2]
-        return crop(cropped, (x0, y0, x0 + dx, y0 + dy), copy=False)
+        return crop(cropped, (x0, y0, x0 + dx, y0 + dy + 23), copy=False)
 
 
 def phantasms_count(f):
@@ -175,10 +167,21 @@ def get_skels(f):
     cropped = crop(f, (0, 0, 700, 125), copy=False)
     _, conf, _, coord = cv2.minMaxLoc(cv2.matchTemplate(cropped, SKELS, cv2.TM_CCOEFF_NORMED))
 
-    if conf > 0.7:
+    if conf > CONF_THRESHOLD_TM:
         x0, y0 = coord
         dy, dx = SKELS.shape[:2]
         return crop(cropped, (x0, y0, x0 + dx + 19, y0 + dy + 21), copy=False)
+
+
+CWALK = cv2.imread('cwalk.png')
+
+
+def can_cast(f):
+    cropped = crop(f, (0, 0, 700, 125), copy=False)
+    _, conf, _, coord = cv2.minMaxLoc(cv2.matchTemplate(cropped, CWALK, cv2.TM_CCOEFF_NORMED))
+
+    if conf > 0.7:
+        return True
 
 
 def skels_count(f):
@@ -190,13 +193,15 @@ def find_num(img):
     max_conf = 0
     if img is None:
         return 0
+
     for i, mask in BUFF_NUMS.items():
         _, conf, _, coord = cv2.minMaxLoc(cv2.matchTemplate(img, mask, cv2.TM_CCOEFF_NORMED))
         if conf > max_conf:
             candidate = i
             max_conf = conf
-    if max_conf > 0.7:
+    if max_conf > 0.5:
         return candidate
+    return 0
 
 
 class OCRArea(ABC):
@@ -242,6 +247,31 @@ def detect_next(img, txt):
                 y1 = int(life_coord[2][1])
                 pos = [x0, y0, x1, y1]
                 return pos
+
+
+class GameHandler:
+    def __init__(self):
+        self.life = LifeFragment()
+        self.mana = ManaFragment()
+
+    def frame(self, full):
+        if not can_cast(full):
+            return
+
+        p_count = phantasms_count(full)
+        pp = get_phantasms(full)
+        if pp is not None:
+            cv2.imshow('debug', pp)
+        if p_count < 10:
+            if not dessecrate():
+                offering()
+
+        last = self.life.frame(full)
+        if last is not None:
+            cv2.imshow('LIFE', last)
+
+    def handle_key(self, char):
+        pass
 
 
 class LifeFragment(OCRArea):
@@ -294,6 +324,7 @@ class LifeFragment(OCRArea):
         if not self.pos:
             put_text(img, 'wait init')
             return
+
         data = 'ERR'
         try:
             curr, total = self.get_life(img)
@@ -327,7 +358,7 @@ class LifeFragment(OCRArea):
         self.conf = (self.conf * self.frames + conf) / (self.frames + 1)
         # print(f'{self.conf=} {self.frames=} {conf=}')
         self.frames += 1
-        if conf < CONF_TRESHOLD:
+        if conf < CONF_THRESHOLD:
             print(f'{life_string=} => {conf=}')
             return
         life_string = life_string.replace(',', '').replace('.', '')
@@ -385,7 +416,7 @@ class ManaFragment(OCRArea):
 
     def process_mana(self, img):
         mana_str, conf = self.ocr_one(img)
-        if conf < CONF_TRESHOLD:
+        if conf < CONF_THRESHOLD:
             return
         curr, total = mana_str.split('/')
         curr = int(curr.replace(',', ''))
@@ -411,7 +442,8 @@ class ManaFragment(OCRArea):
 
 def video_frames(cap):
     positioned = False
-    life = LifeFragment()
+    game = GameHandler()
+    life = game.life
     c = 0
     while cap.isOpened():
         c += 1
@@ -427,17 +459,22 @@ def video_frames(cap):
         elif cv2.waitKey(10) & 0xFF == ord('d'):
             life.detect(frame)
 
-        life.frame(frame)
+        game.frame(frame)
+
+        # life.frame(frame)
         cv2.rectangle(frame, *life.rect, (255, 0, 255), 1)
         put_text(frame, str(life.prev), life.rect[1])
 
         print(f'L: {life.prev} / {life.frames} / {life.conf}', flush=True)
 
-        if life.prev and (life.prev[1] != 4246):
-            cv2.imwrite('bad.png', orig)
-            cv2.waitKey(10000)
+        # if life.prev and (life.prev[1] != 4246):
+        #     cv2.imwrite('bad.png', orig)
+        #     cv2.waitKey(10000)
 
-        cv2.imshow('video', frame)
+        to_show = frame.copy()
+        if ctx.gui.method_calls:
+            put_text(to_show, [str(c) for c in ctx.gui.method_calls])
+        cv2.imshow('video', to_show)
         if not positioned:
             positioned = True
             m2 = sct.monitors[2]
@@ -457,58 +494,36 @@ def play_video(video=py_rel_path('../20210818_13-14-52.mp4').resolve().as_uri())
             cv2.destroyWindow('video')
 
 
+@throttle(1.4)
+def dessecrate():
+    ctx.gui.hotkey('t')
+    return True
+
+
+@throttle(0.70)
+def offering():
+    ctx.gui.hotkey('e')
+    return True
+
+
 def capture_loop():
-    if not POSITION:
-        get_pos()
-
-    life = LifeFragment()
-    mana = ManaFragment()
-
-    global LIFE_POS
+    game = GameHandler()
 
     try:
         while True:
-            pos = tuple(POSITION)
             s = sct.grab(F_MON)
-            full = np.array(s)
-            img = crop(full, pos)
-
-            img2 = img.copy()
-
-            last = life.frame(full)
-            # mana.frame(full)
-
-            if last is not None:
-                cv2.imshow('LIFE', last)
-
+            full = np.array(s)[:, :, :3]
+            game.frame(full)
             k = cv2.waitKey(30) & 0xFF
 
             if k == ord('q'):
                 cv2.destroyAllWindows()
                 break
 
-            delta = 0
+            if ik(k, 'o'):
+                run_ocr(full)
+            else:
+                game.handle_key(k)
 
-            if ik(k, 'j'):
-                delta = (0, STEP, 0, STEP)
-            elif ik(k, 'k'):
-                delta = (0, -STEP, 0, -STEP)
-            elif ik(k, 'h'):
-                delta = (-STEP, 0, -STEP, 0)
-            elif ik(k, 'l'):
-                delta = (STEP, 0, STEP, 0)
-            elif ik(k, 'o'):
-                run_ocr(img2)
-            elif ik(k, 'd'):
-                life.detect(full)
-                mana.detect(full)
-            elif ik(k, 'a'):
-                LIFE_POS = True
-
-            if delta:
-                LIFE_POS = False
-                new_pos = list(map(sum, zip(POSITION, delta)))
-                if bound_ok(new_pos):
-                    set_pos(new_pos)
     finally:
         cv2.destroyAllWindows()
