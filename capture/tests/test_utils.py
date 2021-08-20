@@ -8,3 +8,8 @@ def test_01_ctx(ctx):
 
     ctx['time'] = 1
     assert time.time() - ctx.time() > 1000
+
+
+def test_01_ctx_time(ctx):
+    with ctx.mock_gui():
+        pass

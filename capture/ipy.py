@@ -1,7 +1,7 @@
 import json
 from abc import ABC, abstractmethod
 from contextlib import suppress
-from functools import lru_cache
+from collections import deque
 
 import cv2
 import easyocr
@@ -11,8 +11,8 @@ from IPython import get_ipython
 
 from fan_tools.python import py_rel_path
 
-from capture import ipy  # autoreload self
-from capture.utils import ctx, throttle
+from capture import ipy  # noqa autoreload self
+from capture.utils import ctx, throttle, spell
 
 
 i = get_ipython()
@@ -24,7 +24,7 @@ sct = mss.mss()
 FILE_BASE = py_rel_path('../.data')
 FILE_BASE.mkdir(exist_ok=True)
 
-CONF_THRESHOLD = 0.67  # OCR
+CONF_THRESHOLD = 0.56  # OCR
 CONF_THRESHOLD_TM = 0.7  # cv2 template matching
 BUFF_NUMS = {}
 
@@ -79,7 +79,6 @@ def bound_ok(rect):
     return True
 
 
-# @lru_cache(3)
 def run_ocr(img: np.ndarray):
     global IMG, DATA
     IMG = img
@@ -104,23 +103,26 @@ def reaper():
     return 58
 
 
-@throttle(0.6)
+@throttle(0.2)
 def instant_life_tap():
     ctx.gui.hotkey('g')  # life
     convocation()
     reaper()
+    return True
 
 
-@throttle(7.0)
+@throttle(0.8)
 def long_life_tap():
     ctx.gui.hotkey('a')  # life long
     convocation()
     reaper()
+    return True
 
 
-@throttle(0.5)
+@spell(0.08, 0.35)
 def summon():
     ctx.gui.click(button='right')
+    return True
 
 
 def put_text(img, txt, pos=(5, 20)):
@@ -176,7 +178,7 @@ def get_skels(f):
 CWALK = cv2.imread('cwalk.png')
 
 
-def can_cast(f):
+def can_spell(f):
     cropped = crop(f, (0, 0, 700, 125), copy=False)
     _, conf, _, coord = cv2.minMaxLoc(cv2.matchTemplate(cropped, CWALK, cv2.TM_CCOEFF_NORMED))
 
@@ -253,18 +255,27 @@ class GameHandler:
     def __init__(self):
         self.life = LifeFragment()
         self.mana = ManaFragment()
+        ctx.reset()
+        self.d_or_s = True
 
     def frame(self, full):
-        if not can_cast(full):
+        ctx.frame(full)
+        if not can_spell(full):
             return
 
         p_count = phantasms_count(full)
-        pp = get_phantasms(full)
-        if pp is not None:
-            cv2.imshow('debug', pp)
+        # pp = get_phantasms(full)
+        # if pp is not None:
+        #     cv2.imshow('debug', pp)
+
         if p_count < 10:
-            if not dessecrate():
-                offering()
+
+            if self.d_or_s:
+                if dessecrate():
+                    self.d_or_s = False
+            else:
+                if offering():
+                    self.d_or_s = True
 
         last = self.life.frame(full)
         if last is not None:
@@ -452,11 +463,12 @@ def video_frames(cap):
             continue
 
         orig = frame.copy()
+        k = cv2.waitKey(10)
         if not ok:
             break
-        if cv2.waitKey(10) & 0xFF == ord('q'):
+        if k & 0xFF == ord('q'):
             break
-        elif cv2.waitKey(10) & 0xFF == ord('d'):
+        elif k & 0xFF == ord('d'):
             life.detect(frame)
 
         game.frame(frame)
@@ -465,15 +477,15 @@ def video_frames(cap):
         cv2.rectangle(frame, *life.rect, (255, 0, 255), 1)
         put_text(frame, str(life.prev), life.rect[1])
 
-        print(f'L: {life.prev} / {life.frames} / {life.conf}', flush=True)
+        # print(f'L: {life.prev} / {life.frames} / {life.conf}', flush=True)
 
         # if life.prev and (life.prev[1] != 4246):
         #     cv2.imwrite('bad.png', orig)
         #     cv2.waitKey(10000)
 
         to_show = frame.copy()
-        if ctx.gui.method_calls:
-            put_text(to_show, [str(c) for c in ctx.gui.method_calls])
+        if ctx.gui_calls:
+            put_text(to_show, [str(c) for c in ctx.gui_calls])
         cv2.imshow('video', to_show)
         if not positioned:
             positioned = True
@@ -483,7 +495,7 @@ def video_frames(cap):
 
 
 def play_video(video=py_rel_path('../20210818_13-14-52.mp4').resolve().as_uri()):
-    with ctx.mock_gui():
+    with ctx.mock_all():
         try:
             cap = cv2.VideoCapture(video)
             video_frames(cap)
@@ -494,13 +506,13 @@ def play_video(video=py_rel_path('../20210818_13-14-52.mp4').resolve().as_uri())
             cv2.destroyWindow('video')
 
 
-@throttle(1.4)
+@spell(0.08, 0.40)
 def dessecrate():
     ctx.gui.hotkey('t')
     return True
 
 
-@throttle(0.70)
+@spell(0.08, 0.66)
 def offering():
     ctx.gui.hotkey('e')
     return True
