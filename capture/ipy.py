@@ -1,7 +1,6 @@
 import json
 from abc import ABC, abstractmethod
 from contextlib import suppress
-from collections import deque
 
 import cv2
 import easyocr
@@ -12,7 +11,7 @@ from IPython import get_ipython
 from fan_tools.python import py_rel_path
 
 from capture import ipy  # noqa autoreload self
-from capture.utils import ctx, throttle, spell
+from capture.utils import ctx, spell, throttle
 
 
 i = get_ipython()
@@ -93,7 +92,7 @@ def run_ocr(img: np.ndarray):
 
 @throttle(3.0)
 def convocation():
-    ctx.gui.hotkey('w')  # convoc
+    return ctx.gui.hotkey('w')  # convoc
     return 11
 
 
@@ -122,6 +121,18 @@ def long_life_tap():
 @spell(0.08, 0.35)
 def summon():
     ctx.gui.click(button='right')
+    return True
+
+
+@spell(0.08, 0.40)
+def dessecrate():
+    ctx.gui.hotkey('t')
+    return True
+
+
+@spell(0.08, 0.66)
+def offering():
+    ctx.gui.hotkey('e')
     return True
 
 
@@ -392,7 +403,6 @@ class ManaFragment(OCRArea):
         self.prev = 0
         self.last_change = 0
         self.active = False
-
         self.regen = 40  # MANUAL
         self.threshold = 353 - 32  # MANUAL
 
@@ -472,6 +482,10 @@ def video_frames(cap):
             life.detect(frame)
 
         game.frame(frame)
+        # if ctx.f_count > 10:
+        #     print(ctx.gui_calls, flush=True)
+        #     print(f'GUI CALLS^')
+        #     return
 
         # life.frame(frame)
         cv2.rectangle(frame, *life.rect, (255, 0, 255), 1)
@@ -485,7 +499,7 @@ def video_frames(cap):
 
         to_show = frame.copy()
         if ctx.gui_calls:
-            put_text(to_show, [str(c) for c in ctx.gui_calls])
+            put_text(to_show, [str(c) for c in ctx.gui_calls], (10, 340))
         cv2.imshow('video', to_show)
         if not positioned:
             positioned = True
@@ -506,21 +520,8 @@ def play_video(video=py_rel_path('../20210818_13-14-52.mp4').resolve().as_uri())
             cv2.destroyWindow('video')
 
 
-@spell(0.08, 0.40)
-def dessecrate():
-    ctx.gui.hotkey('t')
-    return True
-
-
-@spell(0.08, 0.66)
-def offering():
-    ctx.gui.hotkey('e')
-    return True
-
-
 def capture_loop():
     game = GameHandler()
-
     try:
         while True:
             s = sct.grab(F_MON)
