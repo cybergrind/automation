@@ -189,12 +189,16 @@ def get_skels(f):
 CWALK = cv2.imread('cwalk.png')
 
 
-def can_spell(f):
+def is_cwalk(f):
     cropped = crop(f, (0, 0, 700, 125), copy=False)
     _, conf, _, coord = cv2.minMaxLoc(cv2.matchTemplate(cropped, CWALK, cv2.TM_CCOEFF_NORMED))
 
     if conf > 0.7:
         return True
+
+
+def can_spell(f):
+    return is_cwalk()
 
 
 def skels_count(f):
@@ -275,12 +279,7 @@ class GameHandler:
             return
 
         p_count = phantasms_count(full)
-        # pp = get_phantasms(full)
-        # if pp is not None:
-        #     cv2.imshow('debug', pp)
-
         if p_count < 10:
-
             if self.d_or_s:
                 if dessecrate():
                     self.d_or_s = False
@@ -482,6 +481,14 @@ def video_frames(cap):
             life.detect(frame)
 
         game.frame(frame)
+
+        while ctx.c.get('pause_processing'):
+            cv2.waitKey(10)
+
+        if ctx.c.get('kill_processing'):
+            ctx.c.pop('kill_processing')
+            return
+
         # if ctx.f_count > 10:
         #     print(ctx.gui_calls, flush=True)
         #     print(f'GUI CALLS^')
@@ -520,6 +527,17 @@ def play_video(video=py_rel_path('../20210818_13-14-52.mp4').resolve().as_uri())
             cv2.destroyWindow('video')
 
 
+def pause_processing():
+    if ctx.c.get('pause_processing'):
+        ctx.c.pop('pause_processing')
+        return
+    ctx.c['pause_processing'] = True
+
+
+def kill_processing():
+    ctx.c['kill_processing'] = True
+
+
 def capture_loop():
     game = GameHandler()
     try:
@@ -527,7 +545,14 @@ def capture_loop():
             s = sct.grab(F_MON)
             full = np.array(s)[:, :, :3]
             game.frame(full)
-            k = cv2.waitKey(30) & 0xFF
+            k = cv2.waitKey(10) & 0xFF
+
+            while ctx.c.get('pause_processing'):
+                cv2.waitKey(30)
+
+            if ctx.c.get('kill_processing'):
+                ctx.c.pop('kill_processing')
+                return
 
             if k == ord('q'):
                 cv2.destroyAllWindows()
@@ -540,3 +565,18 @@ def capture_loop():
 
     finally:
         cv2.destroyAllWindows()
+
+
+from system_hotkey import SystemHotkey
+
+
+hk = SystemHotkey()
+
+kb = ('super', 'shift', 'u')
+kb2 = ('super', 'shift', 'y')
+
+
+# with suppress(KeyError):
+#     hk.unregister(kb)
+hk.register(kb, callback=lambda x: pause_processing(), overwrite=True)
+hk.register(kb2, callback=lambda x: kill_processing(), overwrite=True)
