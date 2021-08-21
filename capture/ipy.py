@@ -1,6 +1,9 @@
 import json
+import math
+import time
 from abc import ABC, abstractmethod
 from contextlib import suppress
+from functools import wraps
 
 import cv2
 import easyocr
@@ -61,6 +64,23 @@ def dd():
     cv2.destroyWindow('debug')
 
 
+def dtime(str=''):
+    """measure function time and put into context"""
+
+    def _inner(func):
+        @wraps(func)
+        def ret(*args, **kwargs):
+            t = time.time()
+            try:
+                return func(*args, **kwargs)
+            finally:
+                ctx.d(f'{str} time: {time.time() - t:.3f}')
+
+        return ret
+
+    return _inner
+
+
 def ik(key, char):
     return key == ord(char)
 
@@ -88,6 +108,19 @@ def run_ocr(img: np.ndarray):
         strings.append(d[1])
     DATA = '|'.join(strings)
     return data
+
+
+def merge_multi(*images):
+    """merge multiple images into one. for one-pass ocr"""
+    width = max(x.shape[1] for x in images)
+    height = sum(x.shape[0] for x in images)
+    to_ocr = np.zeros((height, width, 3), np.uint8)
+    curr_y = 0
+    for i in images:
+        y, x = i.shape[:2]
+        to_ocr[curr_y : curr_y + y, 0:x, :] = i
+        curr_y += y
+    return to_ocr
 
 
 def read_text(img):
@@ -141,14 +174,16 @@ def offering():
     return True
 
 
-def put_text(img, txt, pos=(5, 20)):
+def put_text(img, txt, pos=(5, 20), color=(255, 255, 255), size=0.5):
+    step = math.ceil(32 * size)
+
     if isinstance(txt, str):
-        cv2.putText(img, txt, pos, cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 255), 2)
+        cv2.putText(img, txt, pos, cv2.FONT_HERSHEY_SIMPLEX, size, color, 2)
     elif isinstance(txt, list):
         x, y = pos
         for idx, s in enumerate(txt):
-            text_pos = (x, y + idx * 17)
-            cv2.putText(img, s, text_pos, cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 255), 2)
+            text_pos = (x, y + idx * step)
+            cv2.putText(img, s, text_pos, cv2.FONT_HERSHEY_SIMPLEX, size, color, 2)
 
 
 def crop(full, pos, copy=True):
@@ -225,6 +260,7 @@ def is_right_ok(f):
         return True
 
 
+@dtime('battle_loc => ')
 def battle_loc(f):
     """
     1. not hideout
@@ -239,6 +275,7 @@ def battle_loc(f):
     return False
 
 
+@dtime('can_spell => ')
 def can_spell(f):
     """
     1. have chat button: no wp or right side menus
@@ -328,7 +365,10 @@ class GameHandler:
 
     def frame(self, full):
         ctx.frame(full)
+        ctx.d(f'Frame: {ctx.f_count}')
+
         if not can_spell(full):
+            ctx.d('Cannot use spell')
             return
 
         last = self.life.frame(full)
@@ -396,6 +436,7 @@ class LifeFragment(OCRArea):
         self.last_img = img.copy()
 
         if not self.pos:
+            ctx.d('wait init')
             put_text(img, 'wait init')
             return
 
@@ -419,6 +460,7 @@ class LifeFragment(OCRArea):
                 data = f'NP: {curr}/ {perc}'
             else:
                 data = f'NP: {curr}'
+            ctx.d(f'Life: {data}')
         except Exception as e:
             err = f'{e=} {self.ls=}'
             if err != self.prev_err:
@@ -427,6 +469,7 @@ class LifeFragment(OCRArea):
         put_text(img, data)
         return img
 
+    @dtime('life with ocr =>')
     def get_life(self, img: np.ndarray):
         life_string, conf = self.ocr_one(img)
         self.conf = (self.conf * self.frames + conf) / (self.frames + 1)
@@ -533,8 +576,10 @@ def video_frames(cap):
             life.detect(frame)
 
         game.frame(frame)
+        dbg(ctx.dbg)
 
         while ctx.c.get('pause_processing'):
+            dbg(['Paused...'] + ctx.dbg)
             cv2.waitKey(10)
 
         if ctx.c.get('kill_processing'):
@@ -590,25 +635,43 @@ def kill_processing():
     ctx.c['kill_processing'] = True
 
 
+def dbg(strings):
+    name = 'dbg'
+    dbg_img = np.zeros((500, 700, 3))
+    put_text(dbg_img, strings, color=(0, 0.7, 0), size=0.65)
+    x0, y0, _, _ = cv2.getWindowImageRect(name)
+    cv2.imshow(name, dbg_img)
+    cv2.waitKey(1)
+
+    m2 = sct.monitors[2]
+    if x0 != -1 and x0 < m2['left']:
+        if x0 < m2['left']:
+            cv2.moveWindow(name, m2['left'], m2['top'])
+
+
 def capture_loop():
     game = GameHandler()
+    dbg(['Init capture'])
+
     try:
         while True:
             s = sct.grab(F_MON)
             full = np.array(s)[:, :, :3]
-
             game.frame(full)
+            dbg(ctx.dbg)
 
-            k = cv2.waitKey(10) & 0xFF
             while ctx.c.get('pause_processing'):
+                dbg(['Paused...'] + ctx.dbg)
                 cv2.waitKey(30)
 
             if ctx.c.get('kill_processing'):
                 ctx.c.pop('kill_processing')
+                dbg(['killed...'])
                 return
 
+            k = cv2.waitKey(8) & 0xFF
+
             if k == ord('q'):
-                cv2.destroyAllWindows()
                 break
 
             if ik(k, 'o'):
@@ -617,7 +680,7 @@ def capture_loop():
                 game.handle_key(k)
 
     finally:
-        cv2.destroyAllWindows()
+        cv2.destroyWindow('Life')
 
 
 from system_hotkey import SystemHotkey

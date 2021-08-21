@@ -93,11 +93,11 @@ class GuiWrapper:
     @property
     def can_click(self):
         if self.mocked:
-            print('CC: true / mocked')
+            # print('CC: true / mocked')
             return True
         self.last_win = self.get_wname() or self.last_win
         ck = self.last_win in ['Path of Exile']
-        print(f'Can click: {ck} => {self.last_win}')
+        # print(f'Can click: {ck} => {self.last_win}')
         return ck
 
     @contextmanager
@@ -124,11 +124,19 @@ class Context(dict):
     def reset(self):
         global _NEXT_CAST
         _NEXT_CAST = 0
-        self.c.update({'f_count': 0, 'f_img': None, 'f': defaultdict(float)})
+        self.c.update({'f_count': 0, 'f_img': None, 'f': defaultdict(float), 'debug': []})
 
     def frame(self, img, delta=1):
         self.c['f_count'] += 1
         self.c['f_img'] = img
+        self.c['debug'] = []
+
+    def d(self, msg):
+        self.c['debug'].append(msg)
+
+    @property
+    def dbg(self):
+        return self.c['debug']
 
     @property
     def f_count(self):
@@ -184,7 +192,7 @@ class Context(dict):
         c = self.c.copy()
         c.pop('f_img')
 
-        print(f'T: {ft} / {c}  => {id(self.c)}')
+        # print(f'T: {ft} / {c}  => {id(self.c)}')
 
         if ft:
             return 1 / ft * self.c['f_count']
