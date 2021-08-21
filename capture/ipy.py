@@ -90,6 +90,11 @@ def run_ocr(img: np.ndarray):
     return data
 
 
+def read_text(img):
+    data = reader.readtext(img)
+    return [d[1] for d in data]
+
+
 @throttle(3.0)
 def convocation():
     return ctx.gui.hotkey('w')  # convoc
@@ -158,12 +163,16 @@ def crop(full, pos, copy=True):
 PHANT = cv2.imread('phant.png')
 
 
+def match(img, template):
+    # can be: np.where(cv2.matchTemplate(cropped, PHANT, cv2.TM_CCOEFF_NORMED) > 0.77)
+    _, conf, _, coord = cv2.minMaxLoc(cv2.matchTemplate(img, template, cv2.TM_CCOEFF_NORMED))
+    if conf > CONF_THRESHOLD_TM:
+        return coord
+
+
 def get_phantasms(f):
     cropped = crop(f, (0, 0, 700, 125), copy=False)
-    # can be: np.where(cv2.matchTemplate(cropped, PHANT, cv2.TM_CCOEFF_NORMED) > 0.77)
-    _, conf, _, coord = cv2.minMaxLoc(cv2.matchTemplate(cropped, PHANT, cv2.TM_CCOEFF_NORMED))
-
-    if conf > CONF_THRESHOLD_TM:
+    if coord := match(cropped, PHANT):
         x0, y0 = coord
         dy, dx = PHANT.shape[:2]
         return crop(cropped, (x0, y0, x0 + dx, y0 + dy + 23), copy=False)
@@ -197,8 +206,52 @@ def is_cwalk(f):
         return True
 
 
+CHAT = cv2.imread('templates/chat.png')
+
+
+def is_chat(f):
+    cropped = crop(f, [140, 1035, 180, 1075], copy=False)
+    if match(cropped, CHAT):
+        return True
+    return False
+
+
+CHAT_UP_BTN = cv2.imread('templates/chat_up_btn.png')
+
+
+def is_right_ok(f):
+    cropped = crop(f, [0, 970, 25, 990], copy=False)
+    if match(cropped, CHAT_UP_BTN):
+        return True
+
+
+def battle_loc(f):
+    """
+    1. not hideout
+    2. has monster level
+    """
+    cropped = crop(f, [2200, 50, 2550, 130], copy=False)
+    line = ' '.join(read_text(cropped)).lower()
+    if 'hideout' in line:
+        return False
+    if 'monster level' in line:
+        return True
+    return False
+
+
 def can_spell(f):
-    return is_cwalk()
+    """
+    1. have chat button: no wp or right side menus
+    2. no chat active
+    3. no hideout and have monster level (turn off when minimap too) + no right side menus
+    """
+    if not is_right_ok(f):
+        return False
+    if is_chat(f):
+        return False
+    if not battle_loc(f):
+        return False
+    return True
 
 
 def skels_count(f):
@@ -278,6 +331,10 @@ class GameHandler:
         if not can_spell(full):
             return
 
+        last = self.life.frame(full)
+        if last is not None:
+            cv2.imshow('LIFE', last)
+
         p_count = phantasms_count(full)
         if p_count < 10:
             if self.d_or_s:
@@ -286,10 +343,6 @@ class GameHandler:
             else:
                 if offering():
                     self.d_or_s = True
-
-        last = self.life.frame(full)
-        if last is not None:
-            cv2.imshow('LIFE', last)
 
     def handle_key(self, char):
         pass
@@ -470,7 +523,6 @@ def video_frames(cap):
         ok, frame = cap.read()
         if c < 30:
             continue
-
         orig = frame.copy()
         k = cv2.waitKey(10)
         if not ok:
@@ -544,9 +596,10 @@ def capture_loop():
         while True:
             s = sct.grab(F_MON)
             full = np.array(s)[:, :, :3]
-            game.frame(full)
-            k = cv2.waitKey(10) & 0xFF
 
+            game.frame(full)
+
+            k = cv2.waitKey(10) & 0xFF
             while ctx.c.get('pause_processing'):
                 cv2.waitKey(30)
 
