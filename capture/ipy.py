@@ -639,10 +639,10 @@ def dbg(strings):
     name = 'dbg'
     dbg_img = np.zeros((500, 700, 3))
     put_text(dbg_img, strings, color=(0, 0.7, 0), size=0.65)
-    x0, y0, _, _ = cv2.getWindowImageRect(name)
     cv2.imshow(name, dbg_img)
     cv2.waitKey(1)
 
+    x0, y0, _, _ = cv2.getWindowImageRect(name)
     m2 = sct.monitors[2]
     if x0 != -1 and x0 < m2['left']:
         if x0 < m2['left']:
