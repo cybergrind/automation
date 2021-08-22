@@ -31,3 +31,7 @@ sections = ['FUTURE', 'STDLIB', 'THIRDPARTY', 'OWN', 'FIRSTPARTY', 'LOCALFOLDER'
 
 known_first_party = ''
 known_own = ['pytest_tipsi_testing', 'pytest_tipsi_django', 'fan_tools']
+
+[tool.pyright]
+
+#strict = ['capture']

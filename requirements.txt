@@ -8,3 +8,4 @@ pytest==6.2.4
 system_hotkey==1.0.3
 xcffib==0.11.1
 xpybutil==0.0.6
+flake8==3.9.2

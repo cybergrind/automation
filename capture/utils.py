@@ -68,6 +68,9 @@ class GuiWrapper:
         if self.mocked:
             self.gui_calls.append(['hotkey', args, kwargs, ctx.time()])
             return True
+        if not self.can_click:
+            ctx.d('cannot click')
+            return False
         self.gui_calls.append(['hotkey', args, kwargs, ctx.time()])
         pyautogui.hotkey(*args, **kwargs)
         return True
@@ -76,6 +79,8 @@ class GuiWrapper:
         if self.mocked:
             self.gui_calls.append(['click', args, kwargs, ctx.time()])
             return True
+        if not self.can_click:
+            return False
         self.gui_calls.append(['click', args, kwargs, ctx.time()])
         pyautogui.click(*args, **kwargs)
         return True
@@ -203,3 +208,20 @@ class Context(dict):
 
 
 ctx = Context()
+
+
+def dtime(debug_msg=''):
+    """decorator that measures function time and put into context"""
+
+    def _inner(func):
+        @wraps(func)
+        def ret(*args, **kwargs):
+            t = time.time()
+            try:
+                return func(*args, **kwargs)
+            finally:
+                ctx.d(f'{debug_msg} time: {time.time() - t:.3f}')
+
+        return ret
+
+    return _inner
