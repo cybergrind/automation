@@ -2,10 +2,11 @@ from contextlib import suppress
 
 import cv2
 import numpy as np
+
 from fan_tools.python import rel_path
 
 from capture.common import crop, detect_text, Handler
-from capture.cv import match, put_text, imread
+from capture.cv import imread, match, put_text
 from capture.ocr import CONF_THRESHOLD, OCRArea, read_text
 from capture.utils import ctx, dtime, spell, throttle
 
@@ -280,9 +281,7 @@ SKELS = imread(T_DIR / 'skels.png')
 
 def get_skels(f):
     cropped = crop(f, (0, 0, 700, 125), copy=False)
-    _, conf, _, coord = cv2.minMaxLoc(cv2.matchTemplate(cropped, SKELS, cv2.TM_CCOEFF_NORMED))
-
-    if conf > CONF_THRESHOLD_TM:
+    if coord := match(cropped, SKELS):
         x0, y0 = coord
         dy, dx = SKELS.shape[:2]
         return crop(cropped, (x0, y0, x0 + dx + 19, y0 + dy + 21), copy=False)

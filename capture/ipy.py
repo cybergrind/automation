@@ -1,3 +1,6 @@
+import time
+from functools import partial
+
 import cv2
 import mss
 import numpy as np
@@ -7,6 +10,7 @@ from fan_tools.python import rel_path
 
 from capture import ipy  # noqa autoreload self
 from capture.cv import put_text
+from capture.games.d2 import D2Handler
 from capture.games.poe import GameHandler
 from capture.ocr import run_ocr
 from capture.utils import ctx
@@ -66,7 +70,50 @@ def bound_ok(rect):
     return True
 
 
-def video_frames(cap):
+def frames_process(cap, handler, after_frame=None):
+    positioned = False
+    c = 0
+    while cap.isOpened():
+        c += 1
+        ok, frame = cap.read()
+        if c < 30:
+            continue
+
+        k = cv2.waitKey(4)
+        if not ok:
+            break
+        if k & 0xFF == ord('q'):
+            break
+
+        t = time.time()
+        handler.frame(frame)
+        pt = time.time() - t
+        ctx.d(f'Process time: {pt:.3}')
+
+        dbg(ctx.dbg)
+
+        while ctx.c.get('pause_processing'):
+            dbg(['Paused...'] + ctx.dbg)
+            cv2.waitKey(10)
+
+        if ctx.c.get('kill_processing'):
+            ctx.c.pop('kill_processing')
+            return
+
+        if ctx.df is not None:
+            if ctx.gui_calls:
+                put_text(ctx.df, [str(c) for c in ctx.gui_calls], (10, 340))
+
+            cv2.imshow('video', ctx.df)
+
+        if not positioned:
+            positioned = True
+            m2 = sct.monitors[2]
+            cv2.moveWindow('video', m2['left'], m2['top'])
+    print(f'Finished: {cap=}')
+
+
+def poe_frames(cap):
     positioned = False
     game = GameHandler()
     life = game.life
@@ -122,16 +169,24 @@ def video_frames(cap):
     print(f'Finished: {cap=}')
 
 
-def play_video(video=rel_path('../20210818_13-14-52.mp4').resolve().as_uri()):
+def video_process(video, frames_process):
     with ctx.mock_all():
         try:
             cap = cv2.VideoCapture(video)
-            video_frames(cap)
+            frames_process(cap)
         except Exception as e:
             print(f'Exc: {e}')
             raise
         finally:
             cv2.destroyWindow('video')
+
+
+def play_video(video=rel_path('../20210818_13-14-52.mp4').resolve().as_uri()):
+    return video_process(video, poe_frames)
+
+
+def play_d2(video=rel_path('../20210820_13-d2.mp4').as_uri()):
+    return video_process(video, partial(frames_process, handler=D2Handler()))
 
 
 def pause_processing():
@@ -159,8 +214,8 @@ def dbg(strings):
             cv2.moveWindow(name, m2['left'], m2['top'])
 
 
-def capture_loop():
-    game = GameHandler()
+def capture_loop(handler=GameHandler):
+    game = handler()
     dbg(['Init capture'])
 
     try:
@@ -195,7 +250,7 @@ def capture_loop():
 
 from system_hotkey import SystemHotkey
 
-p
+
 hk = SystemHotkey()
 
 kb = ('super', 'shift', 'u')

@@ -129,15 +129,22 @@ class Context(dict):
     def reset(self):
         global _NEXT_CAST
         _NEXT_CAST = 0
-        self.c.update({'f_count': 0, 'f_img': None, 'f': defaultdict(float), 'debug': []})
+        self.c.update(
+            {'f_count': 0, 'f_img': None, 'f_debug': None, 'f': defaultdict(float), 'debug': []}
+        )
 
     def frame(self, img, delta=1):
         self.c['f_count'] += 1
         self.c['f_img'] = img
+        self.c['f_debug'] = img.copy()  # debug frame, draw here
         self.c['debug'] = []
 
     def d(self, msg):
         self.c['debug'].append(msg)
+
+    @property
+    def df(self):
+        return self.c['f_debug']
 
     @property
     def dbg(self):
@@ -177,11 +184,18 @@ class Context(dict):
         with self.gui.mock():
             yield
 
+    @property
+    def c_dbg(self):
+        c_copy = self.c.copy()
+        c_copy.pop('f_img')
+        c_copy.pop('f_debug')
+        return c_copy
+
     @contextmanager
     def mock_time(self, fps=60):
         self.c['frame_time'] = fps
-        c = self.c.copy()
-        c.pop('f_img')
+        c = self.c_dbg
+
         print(f'Mock time: {fps} / {c} => {id(self.c)}')
         yield
         print('Unmock time')
@@ -194,8 +208,7 @@ class Context(dict):
 
     def time(self):
         ft = self.c.get('frame_time')
-        c = self.c.copy()
-        c.pop('f_img')
+        c = self.c_dbg
 
         # print(f'T: {ft} / {c}  => {id(self.c)}')
 
