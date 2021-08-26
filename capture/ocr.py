@@ -36,9 +36,9 @@ class OCRArea(ABC):
             if self.f.exists():
                 self.pos = json.loads(self.f.read_text())
 
-    @abstractmethod
-    def detect(self, img):
-        raise NotImplementedError
+    # @abstractmethod
+    # def detect(self, img):
+    #     raise NotImplementedError
 
     @abstractmethod
     def frame(self, data):

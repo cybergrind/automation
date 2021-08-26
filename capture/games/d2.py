@@ -9,7 +9,7 @@ from fan_tools.python import rel_path
 
 from capture.common import crop, detect_text, Handler
 from capture.cv import imread, match, put_text
-from capture.ocr import CONF_THRESHOLD, OCRArea, read_text
+from capture.ocr import CONF_THRESHOLD, OCRArea, read_text, run_ocr
 from capture.utils import ctx, dtime, spell, throttle
 
 
@@ -64,7 +64,15 @@ class Potions:
     coord = (1332, 1350, 1620, 1415)
     data = []
     pos = [None, None, None, None]
+    kb = ['a', 's', 'd', 'f']
     have_read = []
+
+    @throttle(2)
+    def mana(self):
+        for i, w in enumerate(self.pos):
+            if w == POT.MP:
+                ctx.gui.hotkey(self.kb[i])
+                return True
 
     def reread(self):
         for f in self.p_dir.iterdir():
@@ -125,10 +133,97 @@ class Potions:
             # cv2.rectangle(cropped, start, end, h, 3)
 
 
+class MPText(OCRArea):
+    def __init__(self):
+        super().__init__('d2_mana')
+        self.pos = (1800, 1180, 2220, 1230)
+
+    def frame(self, full):
+        if is_inventory(full):
+            # inventory lines fool ocr read
+            # remove when can read from globe
+            return None
+        cropped = crop(full, self.pos, copy=False)
+        mp = self.get_mana(cropped)
+        ctx.d(f'MP: {mp}')
+        return mp
+
+    def get_mana(self, img):
+        with suppress(Exception):
+            data = read_text(img)
+            data = ' / '.join(data).lower()
+            ctx.d(f'O: {data}')
+            data = data.split('ana:')[1].replace('/ 1 /', '/')
+            ctx.d(f'D: {data}')
+            data = data.split('/')
+            if len(data) == 2:
+                return int(data[0]) / int(data[1])
+
+
+C_BUTTON = imread(T_DIR / 'close_btn.png')
+
+
+def is_inventory(full, inv_pos=(1320, 1070, 1400, 1170)):
+    cropped = crop(full, inv_pos)
+    return match(cropped, C_BUTTON)
+
+
+class MP:
+    pos = (2030, 1232, 2031, 1400)
+    pos2 = (2030, 1232, 2045, 1400)
+    pos3 = (1940, 1232, 2155, 1430)
+
+    def __init__(self):
+        self.sample = None
+
+    def smask(self, full):
+        i = crop(full, self.pos2, copy=False)
+        mask = cv2.inRange(i, (40, 0, 0), (90, 40, 40))
+        cv2.imshow('DDD', mask)
+        np.nonzero()
+
+    def smask2(self, full):
+        i = crop(full, self.pos3, copy=True)
+        # g = cv2.cvtColor(i, cv2.COLOR_BGR2GRAY)
+        g = i[:, :, 0]
+        ret, thresh = cv2.threshold(g, 10, 90, 0)
+        contours, hierarchy = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+        cv2.drawContours(i, contours, -1, (0, 255, 0), 3)
+        cv2.imshow('DDD', i)
+
+    def init(self, full):
+        self.sample = crop(full, self.pos, copy=True)
+
+    def frame(self, full):
+        # self.smask(full)
+        # self.smask2(full)
+        # cv2.rectangle(ctx.df, self.pos[:2], self.pos[2:], (255, 0, 255), 2)
+        # cv2.imshow('debug', ctx.df)
+        cropped = crop(full, self.pos, copy=False)
+        full = cropped.shape[0]
+        assert cropped.size == self.sample.size
+        ctx.c['s1'] = self.sample
+        ctx.c['s2'] = cropped
+        matching = np.nonzero(np.all(cropped == self.sample, axis=-1))[0].size
+        return matching / full
+
+        found = np.nonzero(np.all(cropped == np.array([88, 0, 0], np.uint8), axis=-1))[0]
+        # print(f'{found=} / {cropped.shape}')
+        if not found.size:
+            return
+        idx = found[0]
+        # idx = np.nonzero(cropped == [88, 0, 0])[0][0]
+        y = cropped.shape[0]
+        pct = float((y - idx) / y)
+        ctx.d(f'Curr MP: {pct:.2}  => {idx}')
+
+
 class D2Handler(Handler):
     def __init__(self):
         self.potions = Potions()
         self.life = mock.MagicMock()
+        self.mp_i = MP()
+        self.mp = MPText()
         ctx.reset()
 
     g_pos = (2150, 1300, 2200, 1400)
@@ -143,6 +238,16 @@ class D2Handler(Handler):
             ctx.d('No game')
             return
         self.potions.frame(full)
+        if self.mp_i.sample is None:
+            curr_m = self.mp.frame(full)
+            if curr_m and curr_m == 1:
+                self.mp_i.init(full)
+        else:
+            curr_m = self.mp_i.frame(full)
+            ctx.d(f'CurrM: {curr_m:.2}')
+            if curr_m and curr_m < 0.35:  # currently something off
+                self.potions.mana()
+
         ctx.d(f'Frame: {ctx.f_count}')
 
     def handle_key(self, char):
