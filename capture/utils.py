@@ -102,7 +102,7 @@ class GuiWrapper:
             return True
         self.last_win = self.get_wname() or self.last_win
         ck = self.last_win in ['Path of Exile', 'WOW - Wine desktop']
-        print(f'Can click: {ck} => {self.last_win}')
+        # print(f'Can click: {ck} => {self.last_win}')
         return ck
 
     @contextmanager

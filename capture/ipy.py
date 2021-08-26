@@ -170,7 +170,9 @@ def poe_frames(cap):
 
 
 def video_process(video, frames_process):
+    print(f'Before mock')
     with ctx.mock_all():
+        print(f'Inside mock: {ctx.c_dbg}')
         try:
             cap = cv2.VideoCapture(video)
             frames_process(cap)
@@ -186,6 +188,7 @@ def play_video(video=rel_path('../20210818_13-14-52.mp4').resolve().as_uri()):
 
 
 def play_d2(video=rel_path('../20210820_13-d2.mp4').as_uri()):
+    ctx.c['frame_time'] = 60
     return video_process(video, partial(frames_process, handler=D2Handler()))
 
 

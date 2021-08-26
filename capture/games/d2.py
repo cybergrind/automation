@@ -42,11 +42,11 @@ def points_to_rect(p0, p1):
 def hist(img):
     out = []
     mask = cv2.inRange(img, (170, 220, 250), (180, 230, 255))
-    print(f'M: {mask.shape=} / {img.shape=} / {mask.size=}')
+    # print(f'M: {mask.shape=} / {img.shape=} / {mask.size=}')
     mask = None
     for i in range(3):
         h = cv2.calcHist(img[:, :, i], [0], mask, [16], [0, 255])
-        print(f'{h=}')
+        # print(f'{h=}')
         out.append(int(np.argmax(h)))
     return out
 
@@ -94,8 +94,8 @@ class Potions:
             self.data.append((h, _t))
 
     def detect(self, img, cropped):
-        cv2.imshow('I', img)
-        cv2.imshow('C', cropped)
+        # cv2.imshow('I', img)
+        # cv2.imshow('C', cropped)
 
         for template, _type in self.data:
             if match(img, template, 0.93):
@@ -174,12 +174,18 @@ class MP:
     pos3 = (1940, 1232, 2155, 1430)
 
     def __init__(self):
-        self.sample = None
+        if ctx.c.get('frame_time'):
+            self.path = T_DIR / 'mp_sample_video.png'
+        else:
+            self.path = T_DIR / 'mp_sample_game.png'
+        print(f'Read from: {self.path}')
+        self.sample = imread(self.path) if self.path.exists() else None
+        self.mp = MPText()
 
     def smask(self, full):
         i = crop(full, self.pos2, copy=False)
         mask = cv2.inRange(i, (40, 0, 0), (90, 40, 40))
-        cv2.imshow('DDD', mask)
+        # cv2.imshow('DDD', mask)
         np.nonzero()
 
     def smask2(self, full):
@@ -189,21 +195,29 @@ class MP:
         ret, thresh = cv2.threshold(g, 10, 90, 0)
         contours, hierarchy = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
         cv2.drawContours(i, contours, -1, (0, 255, 0), 3)
-        cv2.imshow('DDD', i)
+        # cv2.imshow('DDD', i)
 
     def init(self, full):
         self.sample = crop(full, self.pos, copy=True)
+        cv2.imwrite(str(self.path), self.sample)
 
     def frame(self, full):
         # self.smask(full)
         # self.smask2(full)
         # cv2.rectangle(ctx.df, self.pos[:2], self.pos[2:], (255, 0, 255), 2)
         # cv2.imshow('debug', ctx.df)
+        if self.sample is None:
+            curr_m = self.mp.frame(full)
+            if curr_m and curr_m == 1:
+                self.init(full)
+            else:
+                return
+
         cropped = crop(full, self.pos, copy=False)
         full = cropped.shape[0]
         assert cropped.size == self.sample.size
-        ctx.c['s1'] = self.sample
-        ctx.c['s2'] = cropped
+        # ctx.c['s1'] = self.sample
+        # ctx.c['s2'] = cropped
         matching = np.nonzero(np.all(cropped == self.sample, axis=-1))[0].size
         return matching / full
 
@@ -222,8 +236,7 @@ class D2Handler(Handler):
     def __init__(self):
         self.potions = Potions()
         self.life = mock.MagicMock()
-        self.mp_i = MP()
-        self.mp = MPText()
+        self.mp = MP()
         ctx.reset()
 
     g_pos = (2150, 1300, 2200, 1400)
@@ -238,14 +251,11 @@ class D2Handler(Handler):
             ctx.d('No game')
             return
         self.potions.frame(full)
-        if self.mp_i.sample is None:
-            curr_m = self.mp.frame(full)
-            if curr_m and curr_m == 1:
-                self.mp_i.init(full)
-        else:
-            curr_m = self.mp_i.frame(full)
+
+        curr_m = self.mp.frame(full)
+        if curr_m:
             ctx.d(f'CurrM: {curr_m:.2}')
-            if curr_m and curr_m < 0.35:  # currently something off
+            if curr_m < 0.35:  # currently something off
                 self.potions.mana()
 
         ctx.d(f'Frame: {ctx.f_count}')
