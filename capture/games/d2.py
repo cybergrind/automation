@@ -99,7 +99,7 @@ class Potions:
 
         for template, _type in self.data:
             if match(img, template, 0.93):
-                print(f'Ret type: {_type}')
+                # print(f'Ret type: {_type}')
                 return _type
 
         cv2.imwrite(str(self.p_dir / 'a_unk.png'), cropped)
