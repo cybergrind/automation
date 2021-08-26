@@ -1,5 +1,5 @@
 easyocr==1.4
-fan-tools==2.19.0
+fan-tools==3.0.0
 ipython==7.26.0
 mss==6.1.0
 opencv-python==4.5.3.56

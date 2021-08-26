@@ -3,7 +3,7 @@ import mss
 import numpy as np
 from IPython import get_ipython
 
-from fan_tools.python import py_rel_path
+from fan_tools.python import rel_path
 
 from capture import ipy  # noqa autoreload self
 from capture.cv import put_text
@@ -122,7 +122,7 @@ def video_frames(cap):
     print(f'Finished: {cap=}')
 
 
-def play_video(video=py_rel_path('../20210818_13-14-52.mp4').resolve().as_uri()):
+def play_video(video=rel_path('../20210818_13-14-52.mp4').resolve().as_uri()):
     with ctx.mock_all():
         try:
             cap = cv2.VideoCapture(video)
@@ -195,7 +195,7 @@ def capture_loop():
 
 from system_hotkey import SystemHotkey
 
-
+p
 hk = SystemHotkey()
 
 kb = ('super', 'shift', 'u')

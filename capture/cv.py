@@ -1,4 +1,5 @@
 import math
+from pathlib import Path
 from typing import List, Optional
 
 import cv2
@@ -40,3 +41,7 @@ def put_text(img, txt, pos=(5, 20), color=(255, 0, 255), size=0.5):
         for idx, s in enumerate(txt):
             text_pos = (x, y + idx * step)
             cv2.putText(img, s, text_pos, cv2.FONT_HERSHEY_SIMPLEX, size, color, 2)
+
+
+def imread(path: Path) -> Img:
+    return cv2.imread(str(path))[:, :, :3]

@@ -2,11 +2,15 @@ from contextlib import suppress
 
 import cv2
 import numpy as np
+from fan_tools.python import rel_path
 
 from capture.common import crop, detect_text, Handler
-from capture.cv import match, put_text
+from capture.cv import match, put_text, imread
 from capture.ocr import CONF_THRESHOLD, OCRArea, read_text
 from capture.utils import ctx, dtime, spell, throttle
+
+
+T_DIR = rel_path('../../templates/poe')
 
 
 @throttle(3.0)
@@ -256,7 +260,7 @@ class ManaFragment(OCRArea):
         self.add_regen(reaper())
 
 
-PHANT = cv2.imread('phant.png')
+PHANT = imread(T_DIR / 'phant.png')
 
 
 def get_phantasms(f):
@@ -271,7 +275,7 @@ def phantasms_count(f):
     return find_num((get_phantasms(f)))
 
 
-SKELS = cv2.imread('skels.png')
+SKELS = imread(T_DIR / 'skels.png')
 
 
 def get_skels(f):
@@ -284,7 +288,7 @@ def get_skels(f):
         return crop(cropped, (x0, y0, x0 + dx + 19, y0 + dy + 21), copy=False)
 
 
-CWALK = cv2.imread('cwalk.png')
+CWALK = imread(T_DIR / 'cwalk.png')
 
 
 def is_cwalk(f):
@@ -295,7 +299,7 @@ def is_cwalk(f):
         return True
 
 
-CHAT = cv2.imread('templates/chat.png')
+CHAT = imread(T_DIR / 'chat.png')
 
 
 def is_chat(f):
@@ -305,7 +309,7 @@ def is_chat(f):
     return False
 
 
-CHAT_UP_BTN = cv2.imread('templates/chat_up_btn.png')
+CHAT_UP_BTN = imread(T_DIR / 'chat_up_btn.png')
 
 
 def is_right_ok(f):
@@ -351,7 +355,7 @@ def skels_count(f):
 
 BUFF_NUMS = {}
 for i in range(2, 21):
-    BUFF_NUMS[i] = cv2.imread(f'buffs/{i}.png')
+    BUFF_NUMS[i] = imread(T_DIR / f'buffs/{i}.png')
 
 
 def find_num(img):
