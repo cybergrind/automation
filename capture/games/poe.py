@@ -60,7 +60,7 @@ def offering():
     return True
 
 
-class GameHandler(Handler):
+class POEHandler(Handler):
     def __init__(self):
         self.life = LifeFragment()
         self.mana = ManaFragment()

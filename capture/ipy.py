@@ -1,3 +1,7 @@
+"""
+capture_loop(D2Handler)
+capture_loop(POEHandler)
+"""
 import time
 from functools import partial
 
@@ -11,7 +15,7 @@ from fan_tools.python import rel_path
 from capture import ipy  # noqa autoreload self
 from capture.cv import put_text
 from capture.games.d2 import D2Handler
-from capture.games.poe import GameHandler
+from capture.games.poe import POEHandler
 from capture.ocr import run_ocr
 from capture.utils import ctx
 
@@ -115,7 +119,7 @@ def frames_process(cap, handler, after_frame=None):
 
 def poe_frames(cap):
     positioned = False
-    game = GameHandler()
+    game = POEHandler()
     life = game.life
     c = 0
     while cap.isOpened():
@@ -217,7 +221,7 @@ def dbg(strings):
             cv2.moveWindow(name, m2['left'], m2['top'])
 
 
-def capture_loop(handler=GameHandler):
+def capture_loop(handler=POEHandler):
     game = handler()
     dbg(['Init capture'])
 
