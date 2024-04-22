@@ -56,7 +56,7 @@ def click_waypoint():
         pyautogui.moveTo(coord.x + 15, coord.y + 10)
         time.sleep(0.03)
         pyautogui.click()
-        time.sleep(0.2)
+        time.sleep(0.4)
         screen = ctx.screenshot()
 
     if coord := match(screen, WP_IMAGE):
