@@ -6,7 +6,7 @@ import numpy as np
 from fan_tools.python import rel_path
 
 from capture.common import crop, detect_text, Handler
-from capture.cv import imread, match, put_text
+from capture.cv import imread, put_text
 from capture.ocr import CONF_THRESHOLD, OCRArea, read_text
 from capture.utils import ctx, dtime, spell, throttle
 

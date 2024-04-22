@@ -5,6 +5,8 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from functools import wraps
 
+import mss
+import numpy as np
 import pyautogui
 
 from fan_tools.unix import succ
@@ -218,6 +220,16 @@ class Context(dict):
         if 'time' in self.c:
             return self.c['time']
         return time.time()
+
+    def screenshot(self):
+        if not hasattr(self, 'sct'):
+            self.sct = mss.mss()
+        if not hasattr(self, 'monitors'):
+            self.monitors = self.sct.monitors
+            self.monitor = self.monitors[0]
+        s = self.sct.grab(self.monitor)
+        full = np.array(s)[:, :, :3]
+        return full
 
 
 ctx = Context()

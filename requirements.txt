@@ -2,7 +2,7 @@
 fan-tools==3.0.0
 ipython==7.26.0
 mss==6.1.0
-#opencv-python==4.5.3.56
+opencv-python==4.5.3.56
 pyautogui==0.9.53
 pytest==6.2.4
 system_hotkey==1.0.3

@@ -15,6 +15,8 @@ def match(img: Img, template: Img, threshold: float = CONF_THRESHOLD_TM) -> Opti
     # can be: np.where(cv2.matchTemplate(cropped, PHANT, cv2.TM_CCOEFF_NORMED) > 0.77)
     _, conf, _, coord = cv2.minMaxLoc(cv2.matchTemplate(img, template, cv2.TM_CCOEFF_NORMED))
     if conf > threshold:
+        if len(coord) == 2:
+            return Rect(*coord, *template.shape[:2])
         return coord
 
 
