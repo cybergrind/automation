@@ -97,10 +97,12 @@ def get_single():
 
 
 def clicks():
+    hk.unregister(KP_END)
     with pyautogui.hold('ctrl'):
-        for _ in range(5):
+        for _ in range(8):
             pyautogui.click()
             time.sleep(0.01)
+    hk.register(KP_END, callback=lambda x: clicks(), overwrite=True)
 
 
 def main():
