@@ -1,36 +1,33 @@
-[tool.black]
+[tool.ruff]
 line-length = 100
-skip-string-normalization = true
-skip-magic-trailing-comma = true
-target-version = ['py38']
-include = '\.pyi?$'
-exclude = '''
-/(
-    \.git
-  | \.hg
-  | \.mypy_cache
-  | \.tox
-  | venv
-  | _build
-  | buck-out
-  | build
-  | dist
-)/
-'''
+select = [
+  "E",     # pycodestyle
+  "F",     # pyflakes
+  "I",     # isort
+  "G",     # flake8-logging-format
+  "ASYNC", # flake8-async
+  "PIE",   # flake8-pie
+  "T20",   # flake8-print
+  "PT",    # flake8-pytest-style
+  "Q",     # flake8-quotes
+]
+ignore = [
+  "Q001",
+  "Q003"
+]
 
-[tool.isort]
-combine_as_imports = true
-default_section = 'THIRDPARTY'
-force_alphabetical_sort_within_sections = true
-force_grid_wrap = 0
-include_trailing_comma = true
-line_length = 100
-lines_after_imports = 2
-multi_line_output = 3
-sections = ['FUTURE', 'STDLIB', 'THIRDPARTY', 'OWN', 'FIRSTPARTY', 'LOCALFOLDER']
+[tool.ruff.format]
+quote-style = "single"
 
-known_first_party = ''
-known_own = ['pytest_tipsi_testing', 'pytest_tipsi_django', 'fan_tools']
+[tool.ruff.lint.isort]
+combine-as-imports = true
+known-first-party = ['snapshot_manager']
+lines-after-imports = 2
+
+[tool.ruff.lint.flake8-quotes]
+docstring-quotes = "double"
+inline-quotes = "single"
+multiline-quotes = "single"
 
 [tool.pyright]
 
