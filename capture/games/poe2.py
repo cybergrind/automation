@@ -2,11 +2,14 @@
 import logging
 import threading
 import time
+from contextlib import suppress
 from dataclasses import dataclass
 from subprocess import run
 from uuid import uuid4
 
 import pyautogui
+import Xlib
+import Xlib.display
 from fan_tools.python import rel_path
 from pynput import mouse
 from system_hotkey import SystemHotkey
@@ -131,34 +134,59 @@ def ensure_press(key, delay=0.23):
 @dataclass
 class SoulrendLoop:
     enabled: bool = False
-    active: bool = False
+    active: float = 0
     last_life: float = 0
     last_malevolence: float = 0
     iteration: int = 0
     exit: bool = False
 
+    ACTIVE_DELAY = 0.3
+    LIFE_TICK = 4.7
+    MALEVOLENCE_TICK = 18.5
+
 
 SOULREND_LOOP = SoulrendLoop()
-LIFE_TICK = 4.7
-MALEVOLENCE_TICK = 18.5
+
+display = Xlib.display.Display()
+root = display.screen().root
+TARGET_WINDOW = 'Path of Exile'
+
+
+def get_active_window():
+    windowID = root.get_full_property(
+        display.intern_atom('_NET_ACTIVE_WINDOW'), Xlib.X.AnyPropertyType
+    ).value[0]
+    window = display.create_resource_object('window', windowID)
+    with suppress(Exception):
+        return window.get_wm_name()
 
 
 def run_soulrend_loop():
     while not SOULREND_LOOP.exit:
         time.sleep(0.1)
+
+        t = time.time()
         SOULREND_LOOP.iteration += 1
         if SOULREND_LOOP.iteration < 8:
             continue
         if not SOULREND_LOOP.enabled:
             continue
         if not SOULREND_LOOP.active:
-           continue
-        t = time.time()
-        if SOULREND_LOOP.last_life + LIFE_TICK < t:
+            continue
+
+        if t - SOULREND_LOOP.active < SoulrendLoop.ACTIVE_DELAY:
+            log.debug(f'delay is: {t - SOULREND_LOOP.active}')
+            continue
+
+        active_window = get_active_window()
+        if active_window != TARGET_WINDOW:
+            continue
+
+        if SOULREND_LOOP.last_life + SOULREND_LOOP.LIFE_TICK < t:
             log.debug('press t')
             ensure_press('t')
             SOULREND_LOOP.last_life = t
-        elif SOULREND_LOOP.last_malevolence + MALEVOLENCE_TICK < t:
+        elif SOULREND_LOOP.last_malevolence + SOULREND_LOOP.MALEVOLENCE_TICK < t:
             log.debug('press a')
             ensure_press('a')
             SOULREND_LOOP.last_malevolence = t
@@ -179,8 +207,15 @@ def get_single():
 
 
 def mouse_click(x, y, button, pressed):
-    if button == mouse.Button.right:
-        SOULREND_LOOP.active = pressed
+    if get_active_window() != TARGET_WINDOW:
+        return
+
+    if button == mouse.Button.right and pressed:
+        SOULREND_LOOP.active = time.time()
+    else:
+        SOULREND_LOOP.active = 0
+
+    # log.debug(f'{SOULREND_LOOP.active=}')
 
 
 def main():
