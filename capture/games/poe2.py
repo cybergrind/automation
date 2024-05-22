@@ -140,7 +140,7 @@ class SoulrendLoop:
     iteration: int = 0
     exit: bool = False
 
-    ACTIVE_DELAY = 0.3
+    ACTIVE_DELAY = 0.15
     LIFE_TICK = 4.7
     MALEVOLENCE_TICK = 18.5
 
@@ -210,11 +210,11 @@ def mouse_click(x, y, button, pressed):
     if get_active_window() != TARGET_WINDOW:
         return
 
-    if button == mouse.Button.right and pressed:
-        SOULREND_LOOP.active = time.time()
-    else:
-        SOULREND_LOOP.active = 0
-
+    if button == mouse.Button.right:
+        if pressed:
+            SOULREND_LOOP.active = time.time()
+        else:
+            SOULREND_LOOP.active = 0
     # log.debug(f'{SOULREND_LOOP.active=}')
 
 
