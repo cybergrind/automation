@@ -10,3 +10,5 @@ xcffib==1.5.0
 xpybutil==0.0.6
 flake8==3.9.2
 xcffib==1.5.0
+AppKit==0.2.8; sys_platform==="darwin"
+pynput==1.7.7

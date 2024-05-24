@@ -1,15 +1,26 @@
+import logging
 import sys
 import time
 from collections import defaultdict, deque
 from contextlib import contextmanager
 from contextvars import ContextVar
 from functools import wraps
+import platform
+
+try:
+    import Xlib
+    import Xlib.display
+except ImportError:
+    Xlib = None
 
 import mss
 import numpy as np
 import pyautogui
 
 from fan_tools.unix import succ
+
+
+log = logging.getLogger(__name__)
 
 
 def throttle(delay):
@@ -250,3 +261,24 @@ def dtime(debug_msg=''):
         return ret
 
     return _inner
+
+
+IS_DARWIN = platform.system() == 'Darwin'
+if IS_DARWIN:
+    from AppKit import NSWorkspace
+else:
+    display = Xlib.display.Display()
+    root = display.screen().root
+    
+def get_active_window():
+    if IS_DARWIN:
+        app_name = NSWorkspace.sharedWorkspace().activeApplication()['NSApplicationName']
+        log.debug(f'{app_name=}')
+        return app_name
+
+    windowID = root.get_full_property(
+        display.intern_atom('_NET_ACTIVE_WINDOW'), Xlib.X.AnyPropertyType
+    ).value[0]
+    window = display.create_resource_object('window', windowID)
+    with suppress(Exception):
+        return window.get_wm_name()

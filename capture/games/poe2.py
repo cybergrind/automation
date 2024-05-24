@@ -8,30 +8,34 @@ from subprocess import run
 from uuid import uuid4
 
 import pyautogui
-import Xlib
-import Xlib.display
 from fan_tools.python import rel_path
 from pynput import mouse
-from system_hotkey import SystemHotkey
+try:
+    from system_hotkey import SystemHotkey
+except:
+    SystemHotkey = None
 
-from capture.common import crop
-from capture.cv import imread, match
-from capture.types import Rect
-from capture.utils import ctx
+#from capture.common import crop
+#from capture.cv import imread, match
+#from capture.types import Rect
+from capture.utils import ctx, get_active_window
 
 
 T_DIR = rel_path('../../templates/poe')
 
 
-hk = SystemHotkey()
+if SystemHotkey:
+    hk = SystemHotkey()
+else:
+    hk = None
 KB_NEW_INSTANCE = ('kp_next',)
 KB_WP_CLICK = ('kp_down',)
 KP_UP = ('kp_up',)
 KP_END = ('kp_end',)
 KP_LEFT = ('kp_left',)  # 6
-WP_IMAGE = imread(T_DIR / 'wp.png')
-RESS_IMAGE = imread(T_DIR / 'ress.png')
-DEL_IMAGE = imread(T_DIR / 'delir.png')
+#WP_IMAGE = imread(T_DIR / 'wp.png')
+#RESS_IMAGE = imread(T_DIR / 'ress.png')
+#DEL_IMAGE = imread(T_DIR / 'delir.png')
 
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s [%(levelname)s] %(name)s: %(message)s')
 log = logging.getLogger('poe2')
@@ -126,6 +130,7 @@ def ensure_press(key, delay=0.23):
 
     xdotool
     """
+    log.debug(f'press: {key=}')
     with pyautogui.hold(key, _pause=True):
         time.sleep(delay)
     return
@@ -133,7 +138,7 @@ def ensure_press(key, delay=0.23):
 
 @dataclass
 class SoulrendLoop:
-    enabled: bool = False
+    enabled: bool = True
     active: float = 0
     last_life: float = 0
     last_malevolence: float = 0
@@ -146,19 +151,7 @@ class SoulrendLoop:
 
 
 SOULREND_LOOP = SoulrendLoop()
-
-display = Xlib.display.Display()
-root = display.screen().root
-TARGET_WINDOW = 'Path of Exile'
-
-
-def get_active_window():
-    windowID = root.get_full_property(
-        display.intern_atom('_NET_ACTIVE_WINDOW'), Xlib.X.AnyPropertyType
-    ).value[0]
-    window = display.create_resource_object('window', windowID)
-    with suppress(Exception):
-        return window.get_wm_name()
+TARGET_WINDOW = ('Path of Exile', 'PathOfExileClient')
 
 
 def run_soulrend_loop():
@@ -179,7 +172,7 @@ def run_soulrend_loop():
             continue
 
         active_window = get_active_window()
-        if active_window != TARGET_WINDOW:
+        if active_window not in TARGET_WINDOW:
             continue
 
         if SOULREND_LOOP.last_life + SOULREND_LOOP.LIFE_TICK < t:
@@ -207,27 +200,32 @@ def get_single():
 
 
 def mouse_click(x, y, button, pressed):
-    if get_active_window() != TARGET_WINDOW:
+    if get_active_window() not in TARGET_WINDOW:
         return
+    log.debug(f'{x=} {y=} {button=} {pressed=}')
 
     if button == mouse.Button.right:
         if pressed:
+            
             SOULREND_LOOP.active = time.time()
         else:
             SOULREND_LOOP.active = 0
+        log.debug(f'set active to {SOULREND_LOOP.active}')
     # log.debug(f'{SOULREND_LOOP.active=}')
 
 
 def main():
     log.info('register')
-    hk.register(KB_NEW_INSTANCE, callback=lambda x: go_instance(), overwrite=True)
-    hk.register(KB_WP_CLICK, callback=lambda x: click_waypoint(), overwrite=True)
-    hk.register(KP_UP, callback=lambda x: get_single(), overwrite=True)
     sl_loop = threading.Thread(target=run_soulrend_loop)
     sl_loop.start()
-    hk.register(KP_LEFT, callback=lambda x: pressed_soulrend_loop(x), overwrite=True)
-    # hk.register(KP_END, callback=lambda x: clicks(), overwrite=True)
-    register_clicks()
+
+    if hk:
+        hk.register(KB_NEW_INSTANCE, callback=lambda x: go_instance(), overwrite=True)
+        hk.register(KB_WP_CLICK, callback=lambda x: click_waypoint(), overwrite=True)
+        hk.register(KP_UP, callback=lambda x: get_single(), overwrite=True)
+        hk.register(KP_LEFT, callback=lambda x: pressed_soulrend_loop(x), overwrite=True)
+        # hk.register(KP_END, callback=lambda x: clicks(), overwrite=True)
+        register_clicks()
     mouse_listener = mouse.Listener(on_click=mouse_click)
     mouse_listener.start()
     try:
