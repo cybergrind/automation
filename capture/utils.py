@@ -3,11 +3,11 @@ import time
 from collections import defaultdict, deque
 from contextlib import contextmanager
 from contextvars import ContextVar
-from functools import wraps
+from functools import cached_property, wraps
 
-import mss
 import numpy as np
 import pyautogui
+from PIL.ImageGrab import grab
 
 from fan_tools.unix import succ
 
@@ -122,6 +122,10 @@ class Context(dict):
         self.inner = sys._ctx_inner
         self.reset()
 
+    def crop_position(self, size) -> tuple[int, int, int, int]:
+        w, h = size
+        return (w / 2, 0, w, h)
+
     def __getitem__(self, name):
         return self.c.__getitem__(name)
 
@@ -222,13 +226,9 @@ class Context(dict):
         return time.time()
 
     def screenshot(self):
-        if not hasattr(self, 'sct'):
-            self.sct = mss.mss()
-        if not hasattr(self, 'monitors'):
-            self.monitors = self.sct.monitors
-            self.monitor = self.monitors[0]
-        s = self.sct.grab(self.monitor)
-        full = np.array(s)[:, :, :3]
+        img = grab()
+        img = img.crop(self.crop_position(img.size))
+        full = np.array(img)
         return full
 
 

@@ -3,7 +3,7 @@ from typing import Optional
 
 import numpy.typing as npt
 
-from capture.ocr import run_ocr
+#from capture.ocr import run_ocr
 from capture.types import Img, Rect
 
 

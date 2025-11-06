@@ -11,7 +11,6 @@ import pyautogui
 import Xlib
 import Xlib.display
 from fan_tools.python import rel_path
-from pynput import mouse
 from system_hotkey import SystemHotkey
 
 from capture.common import crop
@@ -24,10 +23,10 @@ T_DIR = rel_path('../../templates/poe')
 
 
 hk = SystemHotkey()
-KB_NEW_INSTANCE = ('kp_next',)
-KB_WP_CLICK = ('kp_down',)
-KP_UP = ('kp_up',)
-KP_END = ('kp_end',)
+KB_NEW_INSTANCE = ('kp_next',)  # 3
+KB_WP_CLICK = ('kp_down',)  # 4
+KP_UP = ('kp_up',)  # 
+KP_END = ('kp_end',)  # 1
 KP_LEFT = ('kp_left',)  # 6
 WP_IMAGE = imread(T_DIR / 'wp.png')
 RESS_IMAGE = imread(T_DIR / 'ress.png')
@@ -206,17 +205,6 @@ def get_single():
     pyautogui.press('enter')
 
 
-def mouse_click(x, y, button, pressed):
-    if get_active_window() != TARGET_WINDOW:
-        return
-
-    if button == mouse.Button.right:
-        if pressed:
-            SOULREND_LOOP.active = time.time()
-        else:
-            SOULREND_LOOP.active = 0
-    # log.debug(f'{SOULREND_LOOP.active=}')
-
 
 def main():
     log.info('register')
@@ -228,15 +216,12 @@ def main():
     hk.register(KP_LEFT, callback=lambda x: pressed_soulrend_loop(x), overwrite=True)
     # hk.register(KP_END, callback=lambda x: clicks(), overwrite=True)
     register_clicks()
-    mouse_listener = mouse.Listener(on_click=mouse_click)
-    mouse_listener.start()
     try:
         while True:
             time.sleep(0.1)
             # log.debug(pyautogui.position())
     except:
         SOULREND_LOOP.exit = True
-        mouse_listener.stop()
 
 
 if __name__ == '__main__':
