@@ -22,6 +22,16 @@ def match_image(img: Img, template: Img, threshold: float = CONF_THRESHOLD_TM) -
         return coord
 
 
+def match_many(img: Img, template: Img, threshold: float = CONF_THRESHOLD_TM) -> List[Rect]:
+    matches = []
+    res = cv2.matchTemplate(img, template, cv2.TM_CCOEFF_NORMED)
+    loc = np.where(res >= threshold)
+    w, h = template.shape[1], template.shape[0]
+    for pt in zip(*loc[::-1]):
+        matches.append(Rect(pt[0], pt[1], w, h))
+    return matches
+
+
 def merge_multi(*images: List[Img]) -> Img:
     """merge multiple images into one. for one-pass ocr"""
     width = max(x.shape[1] for x in images)

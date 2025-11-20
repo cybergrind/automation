@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import logging
+import time
 
 from fan_tools.python import rel_path
 
@@ -18,15 +19,17 @@ TRADE_CLAIM = imread(T_DIR / 'trade_claim.png')
 TRADE_WINDOW = imread(T_DIR / 'trade_window.png')
 
 
-def trade_card() -> bool:
-    if ctx.click_on(DIVINATION_CARD, ctrl=True):
+def trade_cards() -> bool:
+    matches = ctx.detect_many(DIVINATION_CARD)
+    for position in matches:
+        log.debug('click on card')
+        ctx.click_on(DIVINATION_CARD, position=(position.x, position.y), ctrl=True, remember=False)
         log.debug('click for trade')
-        ctx.click_on(TRADE_BUTTON, offset=(10, 10))
+        ctx.click_on(TRADE_BUTTON, offset=(10, 10), remember=True)
         log.debug('click for claim')
-        ctx.click_on(TRADE_CLAIM, offset=(10, 60), ctrl=True)
+        ctx.click_on(TRADE_CLAIM, offset=(10, 60), ctrl=True, remember=True)
         log.debug('Click ok')
-        return True
-    return False
+        time.sleep(0.3)
 
 
 def main():
@@ -35,8 +38,8 @@ def main():
         log.info('Click alt+shift+click on Lily')
         return
 
-    while trade_card():
-        continue
+    trade_cards()
+
     log.info('Finished')
 
 

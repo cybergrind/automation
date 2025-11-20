@@ -13,7 +13,7 @@ import pyautogui
 from fan_tools.unix import succ
 from PIL.ImageGrab import grab
 
-from capture.cv import match_image
+from capture.cv import match_image, match_many
 from capture.types import Img, Rect
 
 
@@ -163,6 +163,15 @@ class GuiWrapper:
         self.mocked = False
 
 
+class ClickOnResp:
+    def __init__(self, result: bool, screenshot: Img | None):
+        self.result = result
+        self.screenshot = screenshot
+
+    def __bool__(self):
+        return self.result
+
+
 class Context(dict):
     def __init__(self):
         if not hasattr(sys, '_ctx_inner'):  # survive ipython's autoreload
@@ -186,6 +195,7 @@ class Context(dict):
         self.c.update(
             {'f_count': 0, 'f_img': None, 'f_debug': None, 'f': defaultdict(float), 'debug': []}
         )
+        self.remembered = {}
 
     def frame(self, img, delta=1):
         self.c['f_count'] += 1
@@ -270,20 +280,43 @@ class Context(dict):
         return time.time()
 
     def screenshot(self):
+        log.debug('Do screenshot')
         img = grab()
         # img = img.crop(self.crop_position(img.size))
         full = np.array(img)
         return full
 
     def click_on(
-        self, template: Img, delay=0.1, offset=(0, 0), ctrl=False, shift=False, alt=False
-    ) -> bool:
-        full_screen = self.screenshot()
-        log.debug(f'{full_screen.shape=}')
+        self,
+        template: Img,
+        delay=0.1,
+        offset=(0, 0),
+        ctrl=False,
+        shift=False,
+        alt=False,
+        full_screen: Img | None = None,
+        remember=False,
+        position=None,
+    ) -> ClickOnResp:
+        full_screen = None
+        template_hash = hash(template.data.tobytes())
+        if remember and template_hash in self.remembered:
+            position = self.remembered[template_hash]
 
-        if rect := match_image(full_screen, template):
-            x = rect.x + offset[0]
-            y = rect.y + offset[1]
+        if not position:
+            if not full_screen:
+                full_screen = self.screenshot()
+                log.debug(f'{full_screen.shape=}')
+
+            if rect := match_image(full_screen, template):
+                x = rect.x + offset[0]
+                y = rect.y + offset[1]
+                position = (x, y)
+            if remember:
+                self.remembered[template_hash] = position
+
+        if position:
+            x, y = position
             if ctrl or shift or alt:
                 modifier = 'ctrl' if ctrl else 'shift' if shift else 'alt'
                 with hold(modifier):
@@ -293,8 +326,13 @@ class Context(dict):
                 log.debug(f'Click on to {x}, {y}')
                 self.gui.click(x, y)
             time.sleep(delay)
-            return True
-        return False
+            return ClickOnResp(True, full_screen)
+        return ClickOnResp(False, full_screen)
+
+    def detect_many(self, template: Img) -> list[Rect]:
+        img = self.screenshot()
+        matches = match_many(img, template)
+        return matches
 
     def detect(self, template: Img) -> Rect | None:
         img = self.screenshot()
