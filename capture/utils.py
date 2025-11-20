@@ -1,15 +1,23 @@
+import logging
 import sys
 import time
 from collections import defaultdict, deque
 from contextlib import contextmanager
 from contextvars import ContextVar
-from functools import cached_property, wraps
+from enum import IntEnum
+from functools import wraps
+from subprocess import run
 
 import numpy as np
 import pyautogui
+from fan_tools.unix import succ
 from PIL.ImageGrab import grab
 
-from fan_tools.unix import succ
+from capture.cv import match_image
+from capture.types import Img, Rect
+
+
+log = logging.getLogger(__name__)
 
 
 def throttle(delay):
@@ -61,6 +69,30 @@ def spell(cooldown=0.1, cast_time=0):
     return _inner
 
 
+class Key(IntEnum):
+    L_CTRL = 29
+    L_SHIFT = 42
+    L_ALT = 56
+
+
+@contextmanager
+def hold(key):
+    key_map = {
+        'ctrl': Key.L_CTRL,
+        'shift': Key.L_SHIFT,
+        'alt': Key.L_ALT,
+    }
+    key_code = key_map[key]
+
+    # Press key down
+    run(['ydotool', 'key', f'{key_code}:1'])
+    try:
+        yield
+    finally:
+        # Release key
+        run(['ydotool', 'key', f'{key_code}:0'])
+
+
 class GuiWrapper:
     def __init__(self):
         self.mocked = False
@@ -77,14 +109,26 @@ class GuiWrapper:
         pyautogui.hotkey(*args, **kwargs)
         return True
 
-    def click(self, *args, **kwargs):
+    def mousemove(self, x: int, y: int):
+        # ydotool specific, everything must be divided by 2 (2560, 720) -> right-down corner
+        # 1280, 0 - second monitor top
+        x_str = str(x / 2)
+        y_str = str(y / 2)
+        log.info(f'Click to {x_str}, {y_str}')
+        run(['ydotool', 'mousemove', '-a', x_str, y_str])
+
+    def click(self, x=None, y=None, duration=0.02):
         if self.mocked:
-            self.gui_calls.append(['click', args, kwargs, ctx.time()])
+            self.gui_calls.append(['click', {'x': x, 'y': y, 'duration': duration}, ctx.time()])
             return True
         if not self.can_click:
             return False
-        self.gui_calls.append(['click', args, kwargs, ctx.time()])
-        pyautogui.click(*args, **kwargs)
+        self.gui_calls.append(['click', {'x': x, 'y': y, 'duration': duration}, ctx.time()])
+        if x is not None and y is not None:
+            self.mousemove(x, y)
+            if duration:
+                time.sleep(duration)
+        run(['ydotool', 'click', '0xC0'])
         return True
 
     def reset(self):
@@ -102,10 +146,14 @@ class GuiWrapper:
         if self.mocked:
             # print('CC: true / mocked')
             return True
-        self.last_win = self.get_wname() or self.last_win
-        ck = self.last_win in ['Path of Exile', 'WOW - Wine desktop']
-        # print(f'Can click: {ck} => {self.last_win}')
-        return ck
+        # self.last_win = self.get_wname() or self.last_win
+        # ck = self.last_win in ['Path of Exile', 'WOW - Wine desktop']
+        # # print(f'Can click: {ck} => {self.last_win}')
+        # return ck
+
+        # return true, we need to separate cases, sometimes we should move mouse and click
+        # on the window
+        return True
 
     @contextmanager
     def mock(self):
@@ -175,7 +223,7 @@ class Context(dict):
         return self.gui.can_click
 
     @property
-    def gui(self):
+    def gui(self) -> GuiWrapper:
         return self.c['gui']
 
     def add_hotkey(self, *args):
@@ -202,9 +250,9 @@ class Context(dict):
         self.c['frame_time'] = fps
         c = self.c_dbg
 
-        print(f'Mock time: {fps} / {c} => {id(self.c)}')
+        log.debug(f'Mock time: {fps} / {c} => {id(self.c)}')
         yield
-        print('Unmock time')
+        log.debug('Unmock time')
         self.c['frame_time'] = False
 
     @contextmanager
@@ -214,10 +262,6 @@ class Context(dict):
 
     def time(self):
         ft = self.c.get('frame_time')
-        c = self.c_dbg
-
-        # print(f'T: {ft} / {c}  => {id(self.c)}')
-
         if ft:
             return 1 / ft * self.c['f_count']
 
@@ -227,9 +271,34 @@ class Context(dict):
 
     def screenshot(self):
         img = grab()
-        img = img.crop(self.crop_position(img.size))
+        # img = img.crop(self.crop_position(img.size))
         full = np.array(img)
         return full
+
+    def click_on(
+        self, template: Img, delay=0.1, offset=(0, 0), ctrl=False, shift=False, alt=False
+    ) -> bool:
+        full_screen = self.screenshot()
+        log.debug(f'{full_screen.shape=}')
+
+        if rect := match_image(full_screen, template):
+            x = rect.x + offset[0]
+            y = rect.y + offset[1]
+            if ctrl or shift or alt:
+                modifier = 'ctrl' if ctrl else 'shift' if shift else 'alt'
+                with hold(modifier):
+                    log.debug(f'Click on with {modifier=} to {x}, {y}')
+                    self.gui.click(x, y)
+            else:
+                log.debug(f'Click on to {x}, {y}')
+                self.gui.click(x, y)
+            time.sleep(delay)
+            return True
+        return False
+
+    def detect(self, template: Img) -> Rect | None:
+        img = self.screenshot()
+        return match_image(img, template)
 
 
 ctx = Context()

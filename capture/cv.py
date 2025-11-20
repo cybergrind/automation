@@ -1,4 +1,5 @@
 import math
+import logging
 from pathlib import Path
 from typing import List, Optional
 
@@ -9,9 +10,10 @@ from capture.types import Img, Rect
 
 
 CONF_THRESHOLD_TM = 0.7  # cv2 template matching
+log = logging.getLogger(__name__)
 
 
-def match(img: Img, template: Img, threshold: float = CONF_THRESHOLD_TM) -> Optional[Rect]:
+def match_image(img: Img, template: Img, threshold: float = CONF_THRESHOLD_TM) -> Optional[Rect]:
     # can be: np.where(cv2.matchTemplate(cropped, PHANT, cv2.TM_CCOEFF_NORMED) > 0.77)
     _, conf, _, coord = cv2.minMaxLoc(cv2.matchTemplate(img, template, cv2.TM_CCOEFF_NORMED))
     if conf > threshold:

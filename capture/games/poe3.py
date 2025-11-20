@@ -6,7 +6,7 @@ from subprocess import run
 from fan_tools.python import rel_path
 
 from capture.common import crop
-from capture.cv import imread, match
+from capture.cv import imread, match_image
 from capture.types import Rect
 from capture.utils import ctx
 
@@ -23,7 +23,7 @@ KEY_LEFTCTRL = 29
 BTN_LEFT = 0x110
 WIDTH_LEFT = 2560 / 2
 ASHEN_COORD = (472, 651)
-NEW_INST_COORD = (666, 448)
+NEW_INST_COORD = (666, 449)
 
 
 def mousemove(x, y):
@@ -79,23 +79,23 @@ def go_instance():
         # mousemove(1270, 640)
         click_waypoint()
         log.debug('clicked waypoint')
-        time.sleep(0.65)
+        time.sleep(0.35)
         click(*ASHEN_COORD, duration=0.1)
         log.debug('clicked ashen')
-        time.sleep(0.55)
+        time.sleep(0.45)
         click(*NEW_INST_COORD, duration=0.1)
         log.debug('clicked new instance')
         time.sleep(0.1)
 
-    time.sleep(3.5)
+    time.sleep(3.0)
     detect_delirium()
 
 
 def detect_delirium():
     log.info('check delirium')
-    screen = ctx.screenshot()
-    cropped = crop(screen, Rect(2200, 10, 2560, 380))
-    if match(cropped, DEL_IMAGE):
+    cropped = screen = ctx.screenshot()
+    # cropped = crop(screen, Rect(2200, 10, 2560, 380))
+    if match_image(cropped, DEL_IMAGE):
         # play beep with pulseaudio
         run(['paplay', '/usr/share/sounds/freedesktop/stereo/complete.oga'])
         return True
@@ -106,15 +106,15 @@ def click_waypoint():
     screen = ctx.screenshot()
 
     # if need resurrect
-    if coord := match(screen, RESS_IMAGE):
+    if coord := match_image(screen, RESS_IMAGE):
         log.info('need resurrect')
         mousemove(coord.x + 15, coord.y + 10)
         time.sleep(0.03)
         click()
-        time.sleep(0.4)
+        time.sleep(0.3)
         screen = ctx.screenshot()
 
-    if coord := match(screen, WP_IMAGE):
+    if coord := match_image(screen, WP_IMAGE):
         log.info(f'Got waypoing: {coord}')
         mousemove(coord.x + 6, coord.y + 2)
         time.sleep(0.03)
