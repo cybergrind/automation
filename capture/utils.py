@@ -18,6 +18,8 @@ from capture.types import Img, Rect
 
 
 log = logging.getLogger(__name__)
+for name in ['PIL']:
+    logging.getLogger(name).setLevel(logging.INFO)
 
 
 def throttle(delay):

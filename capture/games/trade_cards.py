@@ -19,13 +19,13 @@ TRADE_CLAIM = imread(T_DIR / 'trade_claim.png')
 TRADE_WINDOW = imread(T_DIR / 'trade_window.png')
 
 
-def trade_cards() -> bool:
+def trade_cards():
     matches = ctx.detect_many(DIVINATION_CARD)
     for position in matches:
         log.debug('click on card')
         ctx.click_on(DIVINATION_CARD, position=(position.x, position.y), ctrl=True, remember=False)
         log.debug('click for trade')
-        ctx.click_on(TRADE_BUTTON, offset=(10, 10), remember=True)
+        ctx.click_on(TRADE_BUTTON, offset=(20, 10), remember=True)
         log.debug('click for claim')
         ctx.click_on(TRADE_CLAIM, offset=(10, 60), ctrl=True, remember=True)
         log.debug('Click ok')

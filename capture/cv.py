@@ -22,8 +22,35 @@ def match_image(img: Img, template: Img, threshold: float = CONF_THRESHOLD_TM) -
         return coord
 
 
-def match_many(img: Img, template: Img, threshold: float = CONF_THRESHOLD_TM) -> List[Rect]:
-    matches = []
+OVERLAP_THRESHOLD = 0.7
+
+
+class RectArray:
+    def __init__(self):
+        self.rects: List[Rect] = []
+
+    def has_overlap(self, r: Rect, threshold) -> bool:
+        for er in self.rects:
+            overlap = er.overlap(r)
+            if overlap > threshold:
+                return True
+        return False
+
+    def append(self, r: Rect, overlap = OVERLAP_THRESHOLD):
+        if not self.has_overlap(r, overlap):
+            self.rects.append(r)
+
+    def __iter__(self):
+        return iter(self.rects)
+
+
+def match_many(img: Img, template: Img, threshold: float = CONF_THRESHOLD_TM) -> RectArray:
+    """
+    we get multiple matches in the order of similarity to the template
+    we can get some overlapping detections
+    we want to skip if some of them overlapping more than OVERLAP_THRESHOLD
+    """
+    matches = RectArray()
     res = cv2.matchTemplate(img, template, cv2.TM_CCOEFF_NORMED)
     loc = np.where(res >= threshold)
     w, h = template.shape[1], template.shape[0]
