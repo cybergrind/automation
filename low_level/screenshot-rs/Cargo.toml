@@ -1,0 +1,15 @@
+[package]
+name = "screenshot_rs"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "screenshot_rs"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = { version = "0.22", features = ["extension-module"] }
+numpy = "0.22"
+wayland-client = "0.31"
+wayland-protocols-wlr = { version = "0.3", features = ["client"] }
+nix = { version = "0.29", features = ["mman", "fs"] }
