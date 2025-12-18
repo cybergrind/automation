@@ -95,6 +95,33 @@ def hold(key):
         run(['ydotool', 'key', f'{key_code}:0'])
 
 
+class ScreenshotWrapper:
+    def __init__(self):
+        self.mocked = False
+        self.has_screenshot_rs = False
+        try:
+            import screenshot_rs
+
+            self.screenshot_rs = screenshot_rs
+
+            self.has_screenshot_rs = True
+        except ImportError:
+            pass
+
+    def do_screenshot_rs(self):
+        return self.screenshot_rs.capture('DP-2')
+
+    def screenshot(self):
+        log.debug('Do screenshot')
+
+        if self.has_screenshot_rs:
+            return self.do_screenshot_rs()
+
+        full_img = grab()
+        second_screen = full_img.crop((2560, 0, 5120, 1440))
+        return np.array(second_screen)
+
+
 class GuiWrapper:
     def __init__(self):
         self.mocked = False
@@ -114,7 +141,8 @@ class GuiWrapper:
     def mousemove(self, x: int, y: int):
         # ydotool specific, everything must be divided by 2 (2560, 720) -> right-down corner
         # 1280, 0 - second monitor top
-        x_str = str(x / 2)
+        # + we capture only second monitor
+        x_str = str((x + 2560) / 2)
         y_str = str(y / 2)
         log.info(f'Click to {x_str}, {y_str}')
         run(['ydotool', 'mousemove', '-a', x_str, y_str])
@@ -179,6 +207,7 @@ class Context(dict):
         if not hasattr(sys, '_ctx_inner'):  # survive ipython's autoreload
             sys._ctx_inner = ContextVar('ctx', default={'gui': GuiWrapper(), 'frame_time': None})
         self.inner = sys._ctx_inner
+        self.screenshot_wrapper = ScreenshotWrapper()
         self.reset()
 
     def crop_position(self, size) -> tuple[int, int, int, int]:
@@ -282,11 +311,7 @@ class Context(dict):
         return time.time()
 
     def screenshot(self):
-        log.debug('Do screenshot')
-        img = grab()
-        # img = img.crop(self.crop_position(img.size))
-        full = np.array(img)
-        return full
+        return self.screenshot_wrapper.screenshot()
 
     def click_on(
         self,
