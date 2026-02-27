@@ -1,0 +1,13 @@
+[build-system]
+requires = ["maturin>=1.0,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "system-bridge"
+version = "0.1.0"
+description = "Low-level system integration: screenshots, shortcuts, and more"
+requires-python = ">=3.8"
+dependencies = ["numpy", "pillow"]
+
+[tool.maturin]
+features = ["pyo3/extension-module"]

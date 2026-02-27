@@ -18,7 +18,11 @@ dependencies = [
   "flake8==3.9.2",
   #"xcffib==1.5.0",
   "pillow>=12.0.0",
+  "system-bridge",
 ]
+
+[tool.uv.sources]
+system-bridge = { path = "low_level/system_bridge", editable = true }
 
 [tool.ruff]
 line-length = 100
